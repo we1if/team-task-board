@@ -1,10 +1,10 @@
 # 团队任务看板
 
-一个小巧的团队任务栏:任务发布在上面,大家各自认领、干完销账。所有任务存在组仓的 GitHub issue 里,这个页面只是个看板——不用装任何东西,一个 HTML 文件就能用。
+一个小巧的团队任务栏:任务发布在上面,大家各自认领、干完销账。所有任务存在组仓的 GitHub issue 里,这个页面只是个看板——不用装任何东西,打开网址就能用。
 
 ## 第一次使用(约 3 分钟)
 
-1. 拿到 `task-board.html`,**用 Edge 或 Chrome 打开**(双击没反应?右键 → 打开方式 → Edge → 勾"始终")。需联网。
+1. **打开网址**:https://we1if.github.io/team-task-board/ (需联网。备选:拿到 `task-board.html` 文件,用 Edge 或 Chrome 打开)
 2. 申请一把"钥匙"(Token),让看板能读组仓的任务:
    - 打开 https://github.com/settings/tokens/new
    - Note 随便填(如 `task-board`),Expiration 选 90 天或更长
