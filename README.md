@@ -1,65 +1,33 @@
-# 任务看板 (team-task-board)
+# 团队任务看板
 
-给数据团队用的任务发布/认领看板。**后端零自建**——任务就是组仓里的 GitHub issue(打 `board` 标签),看板只是一个可视化前端。
+一个小巧的团队任务栏:任务发布在上面,大家各自认领、干完销账。所有任务存在组仓的 GitHub issue 里,这个页面只是个看板——不用装任何东西,一个 HTML 文件就能用。
 
-## 用法(组员视角)
+## 第一次使用(约 3 分钟)
 
-1. 拿到 `dist/task-board.html`,**用 Edge 或 Chrome 打开**(双击没反应?右键 → 打开方式 → Edge → 勾"始终")。需联网
-2. 首次使用:右上角「设置」→ 粘贴你的 GitHub Token → 测试连接 → 保存
-3. 看板上「认领」任务 → 干活 → 点「完成」
+1. 拿到 `task-board.html`,**用 Edge 或 Chrome 打开**(双击没反应?右键 → 打开方式 → Edge → 勾"始终")。需联网。
+2. 申请一把"钥匙"(Token),让看板能读组仓的任务:
+   - 打开 https://github.com/settings/tokens/new
+   - Note 随便填(如 `task-board`),Expiration 选 90 天或更长
+   - 勾选最上面的 **repo** 整块
+   - 点底部绿色 **Generate token**,复制生成的 `ghp_` 开头字符串(只显示这一次)
+3. 看板右上角「设置」→ 把 Token 粘进 **GitHub Token** 栏 → 「测试连接」显示成功 → 「保存」→ 「刷新」
 
-### 申请 Token(一次性,2 分钟)
+> Token 相当于你 GitHub 账号的一把钥匙,只保存在你自己浏览器的本地存储里,不要发给任何人、不要截图外传。觉得可能泄露了就去 GitHub 设置里重新生成一个。
 
-1. 打开 https://github.com/settings/personal-access-tokens/new
-2. Token name 随意(如 `task-board`),过期时间选长一点
-3. **Repository access → Only select repositories → 勾选 `WellInsight`**
-4. **Repository permissions → Issues → Read and write**(Metadata 只读会自动带上)
-5. Generate → 复制 token → 粘进看板设置里
+## 日常使用
 
-> ⚠️ Token 只保存在你自己浏览器的 localStorage,**不要提交到任何仓库、不要发给任何人**。泄露了就去 GitHub 设置里 revoke。
+- **认领任务**:「待认领」列里点「认领」,任务进「进行中」,负责人变成你
+- **完成任务**:「进行中」里自己名下的任务,点「完成」
+- **反悔**:点「放弃」退回待认领;关错了的任务可「重新打开」
+- **发任务**:点「新建任务」,填标题(必填)、说明、优先级,发布后出现在「待认领」
+- **找自己的**:左上「筛选」选"我的"或某个人的名字;数据每分钟自动刷新,也可手动点「刷新」
 
-## 用法(发布方视角)
+## 常见问题
 
-- 点「新建任务」:标题必填,说明/优先级可选 → 发布后自动出现在「待认领」列
-- 也可以直接在 GitHub 上给 issue 打 `board` 标签,效果一样
-- 组员认领后任务进入「进行中」;组员点「完成」或你直接关 issue 都会进入「已完成」
-- 若某组员权限不足无法直接认领,卡片会出现「认领已记录 · 待确认」+「确认认领」按钮,点一下即可
+- **提示"Token 无效或已过期"**:Token 复制不完整或已被重新生成。回 GitHub 重新生成一条,重粘重测。
+- **认领时出现"认领已记录 · 待确认"**:你的仓库权限还不够直接认领,看板已自动帮你留言,等有权限的人点「确认认领」即可,不用重试。
+- **看板空白**:右上「设置」检查 owner/仓库名是否正确;确认网络能访问 github.com。
 
-## 给仓主的权限设置(一次性)
+## 问题找谁
 
-组员直接认领/关票需要在 `WellInsight` 仓有 **Triage** 角色:
-Settings → Collaborators(或 Teams)→ 选人 → Role 改为 **Triage**。
-没设也行——看板会自动降级为"评论认领 → 你手动确认"。
-
-## 数据模型
-
-| 看板列 | GitHub 状态 |
-|---|---|
-| 待认领 | issue open 且无 assignee |
-| 进行中 | issue open 且有 assignee |
-| 已完成 | issue closed |
-
-- 优先级 = `P0`–`P3` 标签;`blocked` 标签卡片会显示徽标
-- 看板只改 assignee 和 state,**从不动标签**,与 wayfinder 等自动化共存
-
-## 开发
-
-```
-task-board/
-  index.html            页面骨架
-  assets/style.css      样式(色板遵循项目 DESIGN.md)
-  assets/config.js      配置与 localStorage 安全包装
-  assets/api.js         GitHub REST 客户端
-  assets/render-board.js
-  assets/render-modal.js
-  assets/app.js         状态 + 动作
-  build.py              构建: 内联成单文件
-```
-
-- 开发调试:`index.html?mock=1` 无 token 无网络跑全部 UI(内置样例数据)
-- 构建:`python build.py` → `dist/task-board.html`(单文件,发群里双击即用)
-- 换仓库:设置里改 owner/repo 即可,代码零硬编码;迁组仓同理
-
-## 代码管理
-
-提交走 GitHub:个人仓起步(`we1if/team-task-board`),验证好用后迁组仓。
+看板本身:wyf(we1if)。任务内容:发任务的人。
