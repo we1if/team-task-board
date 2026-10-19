@@ -84,10 +84,10 @@
     return all.filter(function (item) { return !item.pull_request; });
   }
 
-  /* 新建任务; addLabels=false 用于 403 降级重试(打 label 需 Triage) */
-  async function createIssue(owner, repo, title, body, label, priority, addLabels) {
+  /* 新建任务; addLabels=false 用于 403 降级重试(打 label 需 Triage); extraLabels 为导入的额外透传标签 */
+  async function createIssue(owner, repo, title, body, label, priority, addLabels, extraLabels) {
     var payload = { title: title, body: body || "" };
-    if (addLabels) payload.labels = [label, priority];
+    if (addLabels) payload.labels = [label, priority].concat(extraLabels || []);
     return ghFetch("/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues", {
       method: "POST",
       body: payload

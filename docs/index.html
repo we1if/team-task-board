@@ -218,6 +218,35 @@ body {
 .modal-actions { display: flex; gap: 8px; margin-top: 14px; }
 .spacer { flex: 1; }
 
+/* ---- 导入弹窗 ---- */
+.modal-wide { width: 640px; }
+.form-hint a { color: var(--slate); }
+.imp-preview {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  padding: 8px 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.imp-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--line);
+}
+.imp-row:last-child { border-bottom: none; }
+.imp-idx { color: var(--slate); flex-shrink: 0; font-size: 12px; }
+.imp-title { font-weight: 500; word-break: break-word; }
+.imp-note { color: var(--amber); font-size: 12px; }
+.imp-status { margin-left: auto; flex-shrink: 0; font-size: 12px; color: var(--sage); }
+.imp-warn { color: var(--amber); }
+.imp-err { color: var(--clay); }
+.imp-limit { font-size: 12px; margin-bottom: 6px; }
+
 /* ---- Toast ---- */
 .toast {
   position: fixed;
@@ -255,6 +284,7 @@ body {
     <span class="viewer-name" id="viewer-name"></span>
     <button id="btn-refresh" class="btn btn-ghost" type="button">刷新</button>
     <button id="btn-new-task" class="btn btn-primary" type="button">新建任务</button>
+    <button id="btn-import" class="btn btn-ghost" type="button">导入</button>
     <button id="btn-settings" class="btn btn-ghost" type="button">设置</button>
   </div>
 </header>
@@ -330,6 +360,29 @@ body {
       <span class="spacer"></span>
       <button id="btn-nt-cancel" class="btn btn-ghost" type="button">取消</button>
       <button id="btn-nt-submit" class="btn btn-primary" type="button">发布</button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay-import" class="overlay hidden">
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="import-title">
+    <h2 id="import-title" class="modal-title">导入任务</h2>
+    <div class="form-row">
+      <label for="imp-file">选择 JSON 文件(选完自动解析)</label>
+      <input id="imp-file" type="file" accept=".json,application/json,.txt">
+    </div>
+    <div class="form-row">
+      <label for="imp-text">或粘贴 JSON</label>
+      <textarea id="imp-text" rows="6" placeholder='{"tasks":[{"title":"…","priority":"P1","labels":["数据"]}]}'></textarea>
+    </div>
+    <p class="form-hint">格式规范:<a id="imp-spec-link" href="#" target="_blank" rel="noopener noreferrer">import-spec.json</a>(AI Agent 读它就知道怎么发任务)。校验规则:标题必填;优先级非法按 P2;labels 自动剔除 board;与现有任务同名仅提示不拦截。</p>
+    <div id="imp-preview" class="imp-preview hidden"></div>
+    <p id="imp-result" class="form-result"></p>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button id="btn-imp-cancel" class="btn btn-ghost" type="button">取消</button>
+      <button id="btn-imp-parse" class="btn" type="button">解析预览</button>
+      <button id="btn-imp-confirm" class="btn btn-primary" type="button" disabled>确认导入</button>
     </div>
   </div>
 </div>
@@ -479,10 +532,10 @@ body {
     return all.filter(function (item) { return !item.pull_request; });
   }
 
-  /* 新建任务; addLabels=false 用于 403 降级重试(打 label 需 Triage) */
-  async function createIssue(owner, repo, title, body, label, priority, addLabels) {
+  /* 新建任务; addLabels=false 用于 403 降级重试(打 label 需 Triage); extraLabels 为导入的额外透传标签 */
+  async function createIssue(owner, repo, title, body, label, priority, addLabels, extraLabels) {
     var payload = { title: title, body: body || "" };
-    if (addLabels) payload.labels = [label, priority];
+    if (addLabels) payload.labels = [label, priority].concat(extraLabels || []);
     return ghFetch("/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues", {
       method: "POST",
       body: payload
@@ -796,6 +849,204 @@ body {
   });
 })();
 
+/* 弹窗: 导入任务 — 解析导入 JSON → 校验预览 → 批量开 issue(复用 403 降级链路)
+   校验宽进严出: 标题空→跳过, 优先级非法→降 P2, labels 剔除 board, 同名 open 票→提示不拦 */
+(function () {
+  "use strict";
+  window.TB = window.TB || {};
+
+  var SPEC_URL = "https://we1if.github.io/team-task-board/import-spec.json";
+  var PRIORITIES = ["P0", "P1", "P2", "P3"];
+  var SOFT_LIMIT = 50;
+
+  var parsed = [];   /* 校验通过、可导入的任务 */
+  var rejected = 0;  /* 标题为空被跳过的条数 */
+
+  function $(id) { return document.getElementById(id); }
+  function show(id) { $(id).classList.remove("hidden"); }
+  function hide(id) { $(id).classList.add("hidden"); }
+  function result(text, ok) {
+    var node = $("imp-result");
+    node.textContent = text;
+    node.className = "form-result " + (ok ? "ok" : "err");
+  }
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined && text !== null) n.textContent = text;
+    return n;
+  }
+
+  function openImport() {
+    $("imp-file").value = "";
+    $("imp-text").value = "";
+    $("imp-spec-link").href = SPEC_URL;
+    $("imp-preview").textContent = "";
+    hide("imp-preview");
+    $("btn-imp-confirm").disabled = true;
+    result("", true);
+    parsed = [];
+    rejected = 0;
+    show("overlay-import");
+  }
+
+  function onFilePicked() {
+    var file = $("imp-file").files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      $("imp-text").value = reader.result;
+      parseImport();
+    };
+    reader.readAsText(file, "utf-8");
+  }
+
+  function parseImport() {
+    parsed = [];
+    rejected = 0;
+    $("imp-preview").textContent = "";
+    hide("imp-preview");
+    $("btn-imp-confirm").disabled = true;
+
+    var text = $("imp-text").value;
+    if (!text.trim()) { result("请先选择文件或粘贴 JSON", false); return; }
+    var data;
+    try { data = JSON.parse(text); }
+    catch (e) { result("JSON 解析失败: " + e.message, false); return; }
+    var tasks = Array.isArray(data) ? data : (data && data.tasks);
+    if (!Array.isArray(tasks) || !tasks.length) {
+      result("未找到任务列表:应为 {\"tasks\":[…]} 或任务数组", false);
+      return;
+    }
+
+    /* 现存 open 任务同名表, 用于疑似重复提示 */
+    var openTitles = {};
+    (TB.state.issues || []).forEach(function (i) {
+      if (i.state === "open") openTitles[(i.title || "").trim()] = i.number;
+    });
+
+    var box = el("div");
+    var warnCount = 0;
+    tasks.forEach(function (t, idx) {
+      var row = el("div", "imp-row");
+      row.appendChild(el("span", "imp-idx", "#" + (idx + 1)));
+      var title = (t && typeof t.title === "string") ? t.title.trim() : "";
+      if (!title) {
+        rejected++;
+        row.appendChild(el("span", "imp-title imp-err", "(标题为空)"));
+        row.appendChild(el("span", "imp-status imp-err", "跳过"));
+        box.appendChild(row);
+        return;
+      }
+      row.appendChild(el("span", "imp-title", title));
+
+      var notes = [];
+      var priority = (t && PRIORITIES.indexOf(t.priority) >= 0) ? t.priority : "P2";
+      if (t && t.priority && PRIORITIES.indexOf(t.priority) < 0) {
+        notes.push("优先级非法,按 P2");
+      }
+      var labels = (t && Array.isArray(t.labels))
+        ? t.labels.filter(function (x) { return typeof x === "string" && x.trim(); })
+            .map(function (x) { return x.trim(); })
+        : [];
+      var before = labels.length;
+      labels = labels.filter(function (x) { return x.toLowerCase() !== "board"; });
+      if (labels.length !== before) notes.push("已剔除 board 标签");
+
+      var dup = openTitles[title];
+      if (dup !== undefined) notes.push("疑似重复(现有 #" + dup + ")");
+
+      if (notes.length) {
+        warnCount++;
+        row.appendChild(el("span", "imp-note", notes.join(";")));
+      }
+      row.appendChild(el("span", "imp-status" + (notes.length ? " imp-warn" : ""),
+        notes.length ? "可导入·注意" : "可导入"));
+      parsed.push({
+        title: title,
+        body: (t && typeof t.body === "string") ? t.body : "",
+        priority: priority,
+        labels: labels
+      });
+      box.appendChild(row);
+    });
+
+    if (parsed.length > SOFT_LIMIT) {
+      box.insertBefore(el("div", "imp-warn imp-limit",
+        "一次将创建 " + parsed.length + " 个 issue,请确认无误后再导入"), box.firstChild);
+    }
+    show("imp-preview");
+    $("imp-preview").appendChild(box);
+
+    result("共 " + tasks.length + " 条:" + parsed.length + " 条可导入" +
+      (rejected ? "," + rejected + " 条跳过" : "") +
+      (warnCount ? "," + warnCount + " 条带警告" : "") +
+      (TB.state.mock ? "(mock 模式仅演示,不能真实导入)" : ""), true);
+    $("btn-imp-confirm").disabled = parsed.length === 0 || TB.state.mock;
+  }
+
+  async function confirmImport() {
+    if (!parsed.length || TB.state.mock) return;
+    var cfg = TB.state.config;
+    var btn = $("btn-imp-confirm");
+    btn.disabled = true;
+    var degraded = 0;
+    var failures = [];
+    for (var i = 0; i < parsed.length; i++) {
+      var t = parsed[i];
+      result("导入中 " + (i + 1) + "/" + parsed.length + "…", true);
+      try {
+        await TB.api.createIssue(cfg.owner, cfg.repo, t.title, t.body, cfg.label, t.priority, true, t.labels);
+      } catch (err) {
+        if (err.status === 403) {
+          try {
+            await TB.api.createIssue(cfg.owner, cfg.repo, t.title, t.body, cfg.label, t.priority, false, t.labels);
+            degraded++;
+          } catch (err2) {
+            failures.push({ title: t.title, msg: err2.message || String(err2) });
+          }
+        } else {
+          failures.push({ title: t.title, msg: err.message || String(err) });
+        }
+      }
+    }
+    var okCount = parsed.length - failures.length;
+    if (!failures.length) {
+      hide("overlay-import");
+      TB.toast(okCount + " 条任务已导入" + (degraded ? "(" + degraded + " 条缺看板标签,需手动补打)" : ""), degraded > 0);
+      if (TB.refresh) TB.refresh(true);
+    } else {
+      var box = $("imp-preview");
+      box.textContent = "";
+      var wrap = el("div");
+      wrap.appendChild(el("div", "imp-warn", "成功 " + okCount + " 条,失败 " + failures.length + " 条:"));
+      failures.forEach(function (f) {
+        wrap.appendChild(el("div", "imp-row imp-err", f.title + " — " + f.msg));
+      });
+      box.appendChild(wrap);
+      show("imp-preview");
+      result("部分导入完成,可修改 JSON 后重试失败的条目", false);
+      if (okCount > 0 && TB.refresh) TB.refresh(true);
+    }
+    btn.disabled = false;
+  }
+
+  TB.import = { openImport: openImport, parseImport: parseImport, confirmImport: confirmImport };
+
+  /* ---- 事件绑定(模块加载时一次) ---- */
+  $("btn-import").addEventListener("click", openImport);
+  $("btn-imp-parse").addEventListener("click", parseImport);
+  $("btn-imp-confirm").addEventListener("click", confirmImport);
+  $("btn-imp-cancel").addEventListener("click", function () { hide("overlay-import"); });
+  $("imp-file").addEventListener("change", onFilePicked);
+  $("overlay-import").addEventListener("click", function (e) {
+    if (e.target === e.currentTarget) hide("overlay-import");
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") hide("overlay-import");
+  });
+})();
+
 /* 应用主体: 状态 + 启动链 + 动作(含 403 降级) + 刷新 */
 (function () {
   "use strict";
@@ -821,6 +1072,8 @@ body {
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { node.classList.add("hidden"); }, 3500);
   }
+  TB.toast = toast;       /* 供导入等子模块复用 */
+  TB.refresh = refresh;   /* 导入完成后刷新看板(refresh 定义在后, 函数声明提升) */
 
   function banner(text, isError) {
     var node = document.getElementById("banner");

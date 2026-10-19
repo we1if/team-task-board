@@ -1,0 +1,7 @@
+{
+  "_说明": "任务看板导入格式 v1。把 tasks 数组替换为要发布的任务列表,每条字段: title(必填)一句话说清要做什么; body(可选)背景、验收标准; priority(可选)P0/P1/P2/P3,默认 P2; labels(可选)额外标签数组,不要包含 board。AI Agent 发布方式: 对每条任务向 https://api.github.com/repos/Mr-G-9527/WellInsight/issues 发 POST 请求,请求体含 title、body、labels 三个字段,labels 取 [board, priority] 再合并本条 labels,请求头 Authorization: Bearer <Token>(Token 需有该仓库 Issues 写权限)。人工发布: 打开看板 https://we1if.github.io/team-task-board/ → 导入任务 → 选文件或粘贴。发布后任务出现在看板待认领列。",
+  "version": 1,
+  "tasks": [
+    { "title": "示例:整理 10 月第三周 POF 日报数据口径", "body": "做什么、验收标准、相关链接", "priority": "P1", "labels": ["数据"] }
+  ]
+}

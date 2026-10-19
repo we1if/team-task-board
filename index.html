@@ -18,6 +18,7 @@
     <span class="viewer-name" id="viewer-name"></span>
     <button id="btn-refresh" class="btn btn-ghost" type="button">刷新</button>
     <button id="btn-new-task" class="btn btn-primary" type="button">新建任务</button>
+    <button id="btn-import" class="btn btn-ghost" type="button">导入</button>
     <button id="btn-settings" class="btn btn-ghost" type="button">设置</button>
   </div>
 </header>
@@ -97,12 +98,36 @@
   </div>
 </div>
 
+<div id="overlay-import" class="overlay hidden">
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="import-title">
+    <h2 id="import-title" class="modal-title">导入任务</h2>
+    <div class="form-row">
+      <label for="imp-file">选择 JSON 文件(选完自动解析)</label>
+      <input id="imp-file" type="file" accept=".json,application/json,.txt">
+    </div>
+    <div class="form-row">
+      <label for="imp-text">或粘贴 JSON</label>
+      <textarea id="imp-text" rows="6" placeholder='{"tasks":[{"title":"…","priority":"P1","labels":["数据"]}]}'></textarea>
+    </div>
+    <p class="form-hint">格式规范:<a id="imp-spec-link" href="#" target="_blank" rel="noopener noreferrer">import-spec.json</a>(AI Agent 读它就知道怎么发任务)。校验规则:标题必填;优先级非法按 P2;labels 自动剔除 board;与现有任务同名仅提示不拦截。</p>
+    <div id="imp-preview" class="imp-preview hidden"></div>
+    <p id="imp-result" class="form-result"></p>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button id="btn-imp-cancel" class="btn btn-ghost" type="button">取消</button>
+      <button id="btn-imp-parse" class="btn" type="button">解析预览</button>
+      <button id="btn-imp-confirm" class="btn btn-primary" type="button" disabled>确认导入</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast hidden"></div>
 
 <script src="assets/config.js"></script>
 <script src="assets/api.js"></script>
 <script src="assets/render-board.js"></script>
 <script src="assets/render-modal.js"></script>
+<script src="assets/render-import.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>

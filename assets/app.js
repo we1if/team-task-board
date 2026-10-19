@@ -23,6 +23,8 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { node.classList.add("hidden"); }, 3500);
   }
+  TB.toast = toast;       /* 供导入等子模块复用 */
+  TB.refresh = refresh;   /* 导入完成后刷新看板(refresh 定义在后, 函数声明提升) */
 
   function banner(text, isError) {
     var node = document.getElementById("banner");

@@ -211,6 +211,35 @@ body {
 .modal-actions { display: flex; gap: 8px; margin-top: 14px; }
 .spacer { flex: 1; }
 
+/* ---- 导入弹窗 ---- */
+.modal-wide { width: 640px; }
+.form-hint a { color: var(--slate); }
+.imp-preview {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  padding: 8px 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.imp-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--line);
+}
+.imp-row:last-child { border-bottom: none; }
+.imp-idx { color: var(--slate); flex-shrink: 0; font-size: 12px; }
+.imp-title { font-weight: 500; word-break: break-word; }
+.imp-note { color: var(--amber); font-size: 12px; }
+.imp-status { margin-left: auto; flex-shrink: 0; font-size: 12px; color: var(--sage); }
+.imp-warn { color: var(--amber); }
+.imp-err { color: var(--clay); }
+.imp-limit { font-size: 12px; margin-bottom: 6px; }
+
 /* ---- Toast ---- */
 .toast {
   position: fixed;
