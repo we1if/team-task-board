@@ -40,12 +40,19 @@ assert first_ref > 0 and last_ref_end > first_ref, "assets script refs not found
 
 out = html[:first_ref] + f'<script>\n{js_combined}\n</script>' + html[last_ref_end:]
 
-# 输出
+# 输出: dist/ 单文件交付 + docs/index.html (GitHub Pages, 网址直达)
 dist_dir = os.path.join(BASE, "dist")
 os.makedirs(dist_dir, exist_ok=True)
 out_path = os.path.join(dist_dir, "task-board.html")
 with open(out_path, "w", encoding="utf-8") as f:
     f.write(out)
+
+docs_dir = os.path.join(BASE, "docs")
+os.makedirs(docs_dir, exist_ok=True)
+docs_path = os.path.join(docs_dir, "index.html")
+with open(docs_path, "w", encoding="utf-8") as f:
+    f.write(out)
+print(f"also wrote: {docs_path}")
 
 print(f"built: {out_path}")
 print(f"size: {len(out):,} chars ({len(out)/1024:.1f} KB)")

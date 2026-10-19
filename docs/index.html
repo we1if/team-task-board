@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>任务看板</title>
+<style>
+/* 任务看板 — 色板遵循 DESIGN.md: 颜色只表达含义(状态/风险/选中/进度), 不做装饰 */
+:root {
+  --ink: #101414;
+  --ink-2: #2f3534;
+  --paper: #f4f4f0;
+  --paper-2: #fbfbf7;
+  --slate: #60798d;
+  --sage: #768a72;
+  --amber: #ae8758;
+  --clay: #a46862;
+  --line: #d9d9d0;
+  --radius: 6px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.5;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hidden { display: none !important; }
+
+/* ---- 顶栏 ---- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.topbar-left, .topbar-right { display: flex; align-items: center; gap: 10px; }
+.topbar-title { font-size: 16px; font-weight: 600; color: var(--ink); }
+.repo-badge {
+  font-size: 12px;
+  color: var(--slate);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 2px 8px;
+}
+.filter-label { font-size: 12px; color: var(--ink-2); }
+.filter-select, select, input, textarea {
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+}
+.viewer-name { font-size: 12px; color: var(--slate); }
+
+/* ---- 按钮 ---- */
+.btn {
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 5px 12px;
+  cursor: pointer;
+  background: var(--paper-2);
+  color: var(--ink);
+}
+.btn:hover { border-color: var(--slate); }
+.btn-primary { background: var(--slate); border-color: var(--slate); color: #fff; }
+.btn-primary:hover { background: #52697c; }
+.btn-ghost { background: transparent; }
+.btn-small { padding: 2px 8px; font-size: 12px; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+
+/* ---- 提示条 ---- */
+.banner {
+  padding: 8px 16px;
+  font-size: 13px;
+  background: #f0e4d4;
+  border-bottom: 1px solid var(--amber);
+  color: var(--ink);
+}
+.banner.banner-error { background: #efd9d6; border-bottom-color: var(--clay); }
+
+/* ---- 看板 ---- */
+.board {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 12px 16px;
+  min-height: 0;
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  min-height: 0;
+}
+.col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.col-head h2 { font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.col-count {
+  font-size: 12px;
+  color: var(--slate);
+  background: var(--paper);
+  border-radius: var(--radius);
+  padding: 1px 7px;
+}
+.col-body { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+
+.col-empty {
+  color: var(--ink-2);
+  opacity: 0.55;
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 0;
+}
+
+/* ---- 卡片 ---- */
+.card {
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  flex-shrink: 0;
+}
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 3px 0 6px;
+  word-break: break-word;
+}
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+  flex-wrap: wrap;
+}
+.card-num { color: var(--slate); }
+.card-assignee { color: var(--slate); }
+.card-actions { display: flex; gap: 6px; margin-top: 8px; }
+
+/* 标签: 优先级=风险语义, 其余中性 */
+.chip {
+  display: inline-block;
+  font-size: 11px;
+  border-radius: var(--radius);
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  background: var(--paper);
+}
+.chip-p0 { color: #fff; background: var(--clay); border-color: var(--clay); }
+.chip-p1 { color: #fff; background: var(--amber); border-color: var(--amber); }
+.badge-blocked { color: #fff; background: var(--amber); border-color: var(--amber); }
+.badge-pending {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--amber);
+  border: 1px solid var(--amber);
+  border-radius: var(--radius);
+  padding: 0 6px;
+}
+.chip-done { color: #fff; background: var(--sage); border-color: var(--sage); }
+
+/* ---- 弹窗 ---- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 20, 20, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+.modal {
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.modal-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; color: var(--ink); }
+.form-row { margin-bottom: 12px; }
+.form-row label { display: block; font-size: 13px; color: var(--ink-2); margin-bottom: 4px; }
+.form-row input, .form-row select, .form-row textarea { width: 100%; }
+.form-hint { font-size: 12px; color: var(--ink-2); opacity: 0.8; margin-top: 4px; }
+.form-result { font-size: 13px; min-height: 18px; margin: 4px 0; }
+.form-result.ok { color: var(--sage); }
+.form-result.err { color: var(--clay); }
+.req { color: var(--clay); }
+.modal-actions { display: flex; gap: 8px; margin-top: 14px; }
+.spacer { flex: 1; }
+
+/* ---- Toast ---- */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink-2);
+  color: #fff;
+  font-size: 13px;
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  z-index: 20;
+  max-width: 80vw;
+}
+.toast.toast-err { background: var(--clay); }
+
+/* ---- 焦点可见 & 动效 ---- */
+:focus-visible { outline: 2px solid var(--slate); outline-offset: 1px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-left">
+    <h1 class="topbar-title">任务看板</h1>
+    <span class="repo-badge" id="repo-badge"></span>
+  </div>
+  <div class="topbar-right">
+    <label class="filter-label" for="filter-select">筛选</label>
+    <select id="filter-select" class="filter-select"></select>
+    <span class="viewer-name" id="viewer-name"></span>
+    <button id="btn-refresh" class="btn btn-ghost" type="button">刷新</button>
+    <button id="btn-new-task" class="btn btn-primary" type="button">新建任务</button>
+    <button id="btn-settings" class="btn btn-ghost" type="button">设置</button>
+  </div>
+</header>
+
+<div id="banner" class="banner hidden"></div>
+<main class="board">
+  <section class="col" id="col-todo">
+    <div class="col-head"><h2>待认领</h2><span class="col-count" id="count-todo">0</span></div>
+    <div class="col-body" id="body-todo"></div>
+  </section>
+  <section class="col" id="col-doing">
+    <div class="col-head"><h2>进行中</h2><span class="col-count" id="count-doing">0</span></div>
+    <div class="col-body" id="body-doing"></div>
+  </section>
+  <section class="col" id="col-done">
+    <div class="col-head"><h2>已完成</h2><span class="col-count" id="count-done">0</span></div>
+    <div class="col-body" id="body-done"></div>
+  </section>
+</main>
+
+<div id="overlay-settings" class="overlay hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <h2 id="settings-title" class="modal-title">设置</h2>
+    <div class="form-row">
+      <label for="cfg-owner">仓库 Owner</label>
+      <input id="cfg-owner" type="text" placeholder="如 Mr-G-9527">
+    </div>
+    <div class="form-row">
+      <label for="cfg-repo">仓库名</label>
+      <input id="cfg-repo" type="text" placeholder="如 WellInsight">
+    </div>
+    <div class="form-row">
+      <label for="cfg-label">看板标签</label>
+      <input id="cfg-label" type="text" placeholder="如 board">
+    </div>
+    <div class="form-row">
+      <label for="cfg-token">GitHub Token</label>
+      <input id="cfg-token" type="password" placeholder="fine-grained PAT（仅本浏览器保存）">
+      <p class="form-hint">申请：GitHub → Settings → Developer settings → Fine-grained tokens，仅勾选目标仓库，Issues 权限选 Read and write。Token 只保存在你自己浏览器，不要发给任何人。</p>
+    </div>
+    <p id="cfg-test-result" class="form-result"></p>
+    <div class="modal-actions">
+      <button id="btn-test-conn" class="btn btn-ghost" type="button">测试连接</button>
+      <span class="spacer"></span>
+      <button id="btn-settings-cancel" class="btn btn-ghost" type="button">取消</button>
+      <button id="btn-settings-save" class="btn btn-primary" type="button">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay-new-task" class="overlay hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="new-task-title">
+    <h2 id="new-task-title" class="modal-title">新建任务</h2>
+    <div class="form-row">
+      <label for="nt-title">标题 <span class="req">*</span></label>
+      <input id="nt-title" type="text" placeholder="一句话说清要做什么">
+    </div>
+    <div class="form-row">
+      <label for="nt-body">说明</label>
+      <textarea id="nt-body" rows="5" placeholder="背景、验收标准、相关链接（可选）"></textarea>
+    </div>
+    <div class="form-row">
+      <label for="nt-priority">优先级</label>
+      <select id="nt-priority">
+        <option value="P0">P0 紧急</option>
+        <option value="P1">P1 高</option>
+        <option value="P2" selected>P2 普通</option>
+        <option value="P3">P3 低</option>
+      </select>
+    </div>
+    <p id="nt-error" class="form-result"></p>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button id="btn-nt-cancel" class="btn btn-ghost" type="button">取消</button>
+      <button id="btn-nt-submit" class="btn btn-primary" type="button">发布</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+/* 配置与本地存储 — file:// 下 localStorage 可能被禁, 全部走安全包装 */
+(function () {
+  "use strict";
+  window.TB = window.TB || {};
+
+  var DEFAULT_CONFIG = { owner: "Mr-G-9527", repo: "WellInsight", label: "board" };
+
+  function safeGet(key) {
+    try { return window.localStorage.getItem(key); } catch (_) { return null; }
+  }
+  function safeSet(key, value) {
+    try { window.localStorage.setItem(key, value); } catch (_) { /* 存储被禁时静默, 只影响"记住" */ }
+  }
+  function safeRemove(key) {
+    try { window.localStorage.removeItem(key); } catch (_) { /* 同上 */ }
+  }
+
+  function loadConfig() {
+    var raw = safeGet("tb-config");
+    if (!raw) return Object.assign({}, DEFAULT_CONFIG);
+    try {
+      var parsed = JSON.parse(raw);
+      return {
+        owner: parsed.owner || DEFAULT_CONFIG.owner,
+        repo: parsed.repo || DEFAULT_CONFIG.repo,
+        label: parsed.label || DEFAULT_CONFIG.label
+      };
+    } catch (_) {
+      return Object.assign({}, DEFAULT_CONFIG);
+    }
+  }
+
+  function saveConfig(config) {
+    safeSet("tb-config", JSON.stringify(config));
+  }
+
+  function loadToken() { return safeGet("tb-token") || ""; }
+  function saveToken(token) {
+    if (token) safeSet("tb-token", token);
+    else safeRemove("tb-token");
+  }
+
+  function loadFilter() { return safeGet("tb-filter") || "all"; }
+  function saveFilter(value) { safeSet("tb-filter", value); }
+
+  TB.store = {
+    DEFAULT_CONFIG: DEFAULT_CONFIG,
+    loadConfig: loadConfig,
+    saveConfig: saveConfig,
+    loadToken: loadToken,
+    saveToken: saveToken,
+    loadFilter: loadFilter,
+    saveFilter: saveFilter
+  };
+})();
+
+/* GitHub REST API 客户端 — 只做请求与错误归一化, 无业务逻辑 */
+(function () {
+  "use strict";
+  window.TB = window.TB || {};
+
+  var GH_API = "https://api.github.com";
+  var TIMEOUT_MS = 20000;
+
+  function headers() {
+    var h = {
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28"
+    };
+    var token = TB.store.loadToken();
+    if (token) h["Authorization"] = "Bearer " + token;
+    return h;
+  }
+
+  async function ghError(res) {
+    var detail = "";
+    try {
+      var body = await res.json();
+      if (body && body.message) detail = body.message;
+    } catch (_) { /* 响应体可能为空 */ }
+    var map = {
+      401: "Token 无效或已过期",
+      403: "没有权限执行此操作",
+      404: "仓库不可见（检查设置里的 owner/repo，或 Token 的仓库范围）",
+      422: "请求被拒绝（检查表单内容）"
+    };
+    var msg = map[res.status] || "请求失败（HTTP " + res.status + "）";
+    if (res.status === 403 && res.headers.get("X-RateLimit-Remaining") === "0") {
+      msg = "API 限流，请稍后再试";
+    }
+    if (res.status >= 500 && detail) msg += "：" + detail;
+    return { status: res.status, message: msg };
+  }
+
+  async function ghFetch(path, options) {
+    var opts = options || {};
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, TIMEOUT_MS);
+    var res;
+    try {
+      res = await fetch(GH_API + path, {
+        method: opts.method || "GET",
+        headers: headers(),
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+        signal: ctrl.signal
+      });
+    } catch (_) {
+      throw { status: 0, message: "网络请求失败（检查网络后重试）" };
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok) throw await ghError(res);
+    return res.status === 204 ? null : res.json();
+  }
+
+  /* 验 token, 返回 viewer 登录名 */
+  async function getUser() {
+    var data = await ghFetch("/user");
+    return data.login;
+  }
+
+  /* 探仓: 可见性 + 权限 */
+  async function getRepo(owner, repo) {
+    return ghFetch("/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo));
+  }
+
+  /* 列看板任务: 按 label 过滤, 翻页取全, 过滤掉 PR */
+  async function listIssues(owner, repo, label) {
+    var base = "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) +
+      "/issues?state=all&labels=" + encodeURIComponent(label) +
+      "&sort=updated&direction=desc&per_page=100&page=";
+    var all = [];
+    var page = 1;
+    for (;;) {
+      var batch = await ghFetch(base + page);
+      all = all.concat(batch);
+      if (batch.length < 100) break;
+      page += 1;
+    }
+    return all.filter(function (item) { return !item.pull_request; });
+  }
+
+  /* 新建任务; addLabels=false 用于 403 降级重试(打 label 需 Triage) */
+  async function createIssue(owner, repo, title, body, label, priority, addLabels) {
+    var payload = { title: title, body: body || "" };
+    if (addLabels) payload.labels = [label, priority];
+    return ghFetch("/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues", {
+      method: "POST",
+      body: payload
+    });
+  }
+
+  /* 认领/放弃/完成/重开 共用 */
+  async function patchIssue(owner, repo, num, payload) {
+    return ghFetch("/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) +
+      "/issues/" + num, { method: "PATCH", body: payload });
+  }
+
+  async function addComment(owner, repo, num, body) {
+    return ghFetch("/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) +
+      "/issues/" + num + "/comments", { method: "POST", body: { body: body } });
+  }
+
+  async function listComments(owner, repo, num) {
+    return ghFetch("/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) +
+      "/issues/" + num + "/comments?per_page=100");
+  }
+
+  TB.api = {
+    getUser: getUser,
+    getRepo: getRepo,
+    listIssues: listIssues,
+    createIssue: createIssue,
+    patchIssue: patchIssue,
+    addComment: addComment,
+    listComments: listComments
+  };
+})();
+
+/* 看板渲染 — 纯 DOM 构造, 一律 textContent(issue 内容是外部数据, 禁 innerHTML 防 XSS) */
+(function () {
+  "use strict";
+  window.TB = window.TB || {};
+
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function chip(labelName) {
+    var cls = "chip";
+    if (labelName === "P0") cls += " chip-p0";
+    else if (labelName === "P1") cls += " chip-p1";
+    return el("span", cls, labelName);
+  }
+
+  function relTime(iso) {
+    var ms = Date.now() - new Date(iso).getTime();
+    var minutes = Math.floor(ms / 60000);
+    if (minutes < 1) return "刚刚";
+    if (minutes < 60) return minutes + " 分钟前";
+    var hours = Math.floor(minutes / 60);
+    if (hours < 24) return hours + " 小时前";
+    var days = Math.floor(hours / 24);
+    return days + " 天前";
+  }
+
+  function actionButton(text, className, onClick) {
+    var btn = el("button", "btn btn-small " + className, text);
+    btn.type = "button";
+    btn.addEventListener("click", onClick);
+    return btn;
+  }
+
+  /* 优先级 label 排前, 其余按名 */
+  function labelNames(issue) {
+    return (issue.labels || []).map(function (l) { return l.name || l; });
+  }
+
+  function buildCard(issue, state) {
+    var card = el("div", "card");
+
+    var meta = el("div", "card-meta");
+    meta.appendChild(el("span", "card-num", "#" + issue.number));
+    var names = labelNames(issue);
+    names.forEach(function (name) {
+      if (name === "blocked") return; /* 下面统一用 blocked 徽标, 不重复出 chip */
+      meta.appendChild(chip(name));
+    });
+    if (names.indexOf("blocked") !== -1) {
+      meta.appendChild(el("span", "chip badge-blocked", "blocked"));
+    }
+    if (issue.state === "closed") {
+      meta.appendChild(el("span", "chip chip-done", "已完成"));
+    }
+    card.appendChild(meta);
+
+    card.appendChild(el("div", "card-title", issue.title));
+
+    var foot = el("div", "card-meta");
+    var assignees = issue.assignees || [];
+    if (assignees.length) {
+      foot.appendChild(el("span", "card-assignee",
+        "负责人: " + assignees.map(function (a) { return a.login; }).join(", ")));
+    }
+    foot.appendChild(el("span", "card-age", relTime(issue.updated_at)));
+    card.appendChild(foot);
+
+    var pending = state.pendingClaims[issue.number];
+    if (pending) {
+      card.appendChild(el("span", "badge-pending", "认领已记录 · 待确认（" + pending + "）"));
+    }
+
+    /* 动作按钮: 按所在列决定 */
+    var actions = el("div", "card-actions");
+    if (issue.state === "open" && assignees.length === 0) {
+      if (pending) {
+        actions.appendChild(actionButton("确认认领", "btn-primary", function () {
+          TB.actions.confirmClaim(issue, pending);
+        }));
+      } else {
+        actions.appendChild(actionButton("认领", "btn-primary", function () {
+          TB.actions.claim(issue);
+        }));
+      }
+    } else if (issue.state === "open" && assignees.length > 0) {
+      var mine = state.viewer && assignees.length === 1 && assignees[0].login === state.viewer;
+      if (mine) {
+        actions.appendChild(actionButton("完成", "btn-primary", function () {
+          TB.actions.complete(issue);
+        }));
+        actions.appendChild(actionButton("放弃", "", function () {
+          TB.actions.abandon(issue);
+        }));
+      }
+    } else if (issue.state === "closed") {
+      actions.appendChild(actionButton("重新打开", "", function () {
+        TB.actions.reopen(issue);
+      }));
+    }
+    if (actions.childNodes.length) card.appendChild(actions);
+
+    return card;
+  }
+
+  function matchFilter(issue, filter, viewer) {
+    if (filter === "all") return true;
+    var who = filter === "mine" ? viewer : filter;
+    if (!who) return filter === "all";
+    var assignees = issue.assignees || [];
+    if (issue.state === "open" && assignees.length === 0) return false; /* 未认领票不属于任何人 */
+    return assignees.some(function (a) { return a.login === who; });
+  }
+
+  TB.renderBoard = function (state) {
+    var buckets = { todo: [], doing: [], done: [] };
+    state.issues.forEach(function (issue) {
+      if (!matchFilter(issue, state.filter, state.viewer)) return;
+      var assignees = issue.assignees || [];
+      if (issue.state === "closed") buckets.done.push(issue);
+      else if (assignees.length > 0) buckets.doing.push(issue);
+      else buckets.todo.push(issue);
+    });
+
+    var map = { "todo": "body-todo", "doing": "body-doing", "done": "body-done" };
+    Object.keys(map).forEach(function (key) {
+      var body = document.getElementById(map[key]);
+      body.textContent = "";
+      if (!buckets[key].length) {
+        body.appendChild(el("div", "col-empty", key === "todo" ? "暂无待认领任务" : key === "doing" ? "暂无进行中任务" : "暂无已完成任务"));
+      }
+      buckets[key].forEach(function (issue) {
+        body.appendChild(buildCard(issue, state));
+      });
+      document.getElementById("count-" + key).textContent = String(buckets[key].length);
+    });
+
+    /* 筛选下拉: 全部 / 我的 / 各负责人 */
+    var select = document.getElementById("filter-select");
+    var current = state.filter;
+    var logins = {};
+    state.issues.forEach(function (issue) {
+      (issue.assignees || []).forEach(function (a) { logins[a.login] = true; });
+    });
+    select.textContent = "";
+    [["all", "全部"], ["mine", "我的"]].forEach(function (pair) {
+      var opt = el("option", "", pair[1]);
+      opt.value = pair[0];
+      select.appendChild(opt);
+    });
+    Object.keys(logins).sort().forEach(function (login) {
+      var opt = el("option", "", login);
+      opt.value = login;
+      select.appendChild(opt);
+    });
+    select.value = current;
+    if (select.value !== current) { /* 当前筛选人已无任务 */
+      select.value = "all";
+    }
+  };
+})();
+
+/* 弹窗: 设置 / 新建任务 — TB.modals 挂钩, 业务动作走 TB.actions */
+(function () {
+  "use strict";
+  window.TB = window.TB || {};
+
+  function show(id) { document.getElementById(id).classList.remove("hidden"); }
+  function hide(id) { document.getElementById(id).classList.add("hidden"); }
+  function result(id, text, ok) {
+    var node = document.getElementById(id);
+    node.textContent = text;
+    node.className = "form-result " + (ok ? "ok" : "err");
+  }
+
+  /* ---- 设置 ---- */
+  function openSettings() {
+    var config = TB.state.config;
+    document.getElementById("cfg-owner").value = config.owner;
+    document.getElementById("cfg-repo").value = config.repo;
+    document.getElementById("cfg-label").value = config.label;
+    document.getElementById("cfg-token").value = TB.store.loadToken();
+    result("cfg-test-result", "", true);
+    show("overlay-settings");
+  }
+
+  function saveSettings() {
+    var config = {
+      owner: document.getElementById("cfg-owner").value.trim(),
+      repo: document.getElementById("cfg-repo").value.trim(),
+      label: document.getElementById("cfg-label").value.trim() || TB.store.DEFAULT_CONFIG.label
+    };
+    if (!config.owner || !config.repo) {
+      result("cfg-test-result", "owner 和仓库名不能为空", false);
+      return;
+    }
+    TB.store.saveConfig(config);
+    TB.store.saveToken(document.getElementById("cfg-token").value.trim());
+    TB.actions.configChanged();
+    hide("overlay-settings");
+  }
+
+  async function testConnection() {
+    /* 先落库输入框里的 Token, 保证"测试的就是将要使用的"——否则会拿旧存档去测, 新 Token 永远报无效 */
+    var fieldToken = document.getElementById("cfg-token").value.trim();
+    if (fieldToken) TB.store.saveToken(fieldToken);
+    result("cfg-test-result", "测试中…", true);
+    var owner = document.getElementById("cfg-owner").value.trim();
+    var repo = document.getElementById("cfg-repo").value.trim();
+    try {
+      var login = await TB.api.getUser();
+      await TB.api.getRepo(owner, repo);
+      result("cfg-test-result", "连接成功，当前身份: " + login, true);
+    } catch (err) {
+      result("cfg-test-result", err.message || String(err), false);
+    }
+  }
+
+  /* ---- 新建任务 ---- */
+  function openNewTask() {
+    document.getElementById("nt-title").value = "";
+    document.getElementById("nt-body").value = "";
+    document.getElementById("nt-priority").value = "P2";
+    result("nt-error", "", true);
+    show("overlay-new-task");
+    document.getElementById("nt-title").focus();
+  }
+
+  async function submitNewTask() {
+    var title = document.getElementById("nt-title").value.trim();
+    if (!title) {
+      result("nt-error", "标题不能为空", false);
+      return;
+    }
+    var body = document.getElementById("nt-body").value.trim();
+    var priority = document.getElementById("nt-priority").value;
+    var btn = document.getElementById("btn-nt-submit");
+    btn.disabled = true;
+    result("nt-error", "发布中…", true);
+    try {
+      await TB.actions.createTask(title, body, priority);
+      hide("overlay-new-task");
+    } catch (err) {
+      result("nt-error", err.message || String(err), false);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  TB.modals = { openSettings: openSettings, openNewTask: openNewTask };
+
+  /* ---- 事件绑定(模块加载时一次) ---- */
+  document.getElementById("btn-settings").addEventListener("click", openSettings);
+  document.getElementById("btn-settings-save").addEventListener("click", saveSettings);
+  document.getElementById("btn-settings-cancel").addEventListener("click", function () { hide("overlay-settings"); });
+  document.getElementById("btn-test-conn").addEventListener("click", testConnection);
+  document.getElementById("btn-new-task").addEventListener("click", openNewTask);
+  document.getElementById("btn-nt-submit").addEventListener("click", submitNewTask);
+  document.getElementById("btn-nt-cancel").addEventListener("click", function () { hide("overlay-new-task"); });
+
+  /* 点击遮罩关闭 */
+  [["overlay-settings"], ["overlay-new-task"]].forEach(function (pair) {
+    var id = pair[0];
+    document.getElementById(id).addEventListener("click", function (e) {
+      if (e.target === e.currentTarget) hide(id);
+    });
+  });
+
+  /* Esc 关闭 */
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      hide("overlay-settings");
+      hide("overlay-new-task");
+    }
+  });
+})();
+
+/* 应用主体: 状态 + 启动链 + 动作(含 403 降级) + 刷新 */
+(function () {
+  "use strict";
+  window.TB = window.TB || {};
+
+  var state = {
+    config: TB.store.loadConfig(),
+    issues: [],
+    viewer: null,
+    filter: TB.store.loadFilter(),
+    pendingClaims: {},   /* issue 号 -> 待确认认领人 login */
+    loading: false,
+    mock: new URLSearchParams(location.search).get("mock") === "1"
+  };
+  TB.state = state;
+
+  /* ---- 轻提示 / 横幅 ---- */
+  var toastTimer = null;
+  function toast(text, isErr) {
+    var node = document.getElementById("toast");
+    node.textContent = text;
+    node.className = "toast" + (isErr ? " toast-err" : "");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { node.classList.add("hidden"); }, 3500);
+  }
+
+  function banner(text, isError) {
+    var node = document.getElementById("banner");
+    if (!text) { node.classList.add("hidden"); return; }
+    node.textContent = text;
+    node.className = "banner" + (isError ? " banner-error" : "");
+  }
+
+  /* ---- mock 数据(?mock=1, 无 token 无网络跑通全部 UI) ---- */
+  function nowAgo(minutes) {
+    return new Date(Date.now() - minutes * 60000).toISOString();
+  }
+  var MOCK_ISSUES = [
+    { number: 101, title: "整理 10 月第一周 POF 日报数据口径", state: "open", assignees: [], labels: [{ name: "P1" }, { name: "数据" }], created_at: nowAgo(3000), updated_at: nowAgo(3000) },
+    { number: 102, title: "修复周报里 AT 利用率曲线断点", state: "open", assignees: [], labels: [{ name: "P0" }, { name: "开发" }], created_at: nowAgo(1500), updated_at: nowAgo(40) },
+    { number: 103, title: "仿真数据 C1 入门引导文档评审", state: "open", assignees: [], labels: [{ name: "P2" }, { name: "blocked" }], created_at: nowAgo(6000), updated_at: nowAgo(120) },
+    { number: 104, title: " heatmap 色标量化 legend 对齐 Tableau", state: "open", assignees: [{ login: "wyf-demo" }], labels: [{ name: "P1" }], created_at: nowAgo(8000), updated_at: nowAgo(200) },
+    { number: 105, title: "跨港对比 demo 数据源覆盖矩阵核对", state: "open", assignees: [{ login: "wyf-demo" }], labels: [{ name: "P2" }, { name: "wayfinder:task" }], created_at: nowAgo(9000), updated_at: nowAgo(30) },
+    { number: 100, title: "9 月值班 bot 链路适配", state: "closed", assignees: [{ login: "wyf-demo" }], labels: [{ name: "P2" }], created_at: nowAgo(20000), updated_at: nowAgo(2000) }
+  ];
+  /* mock 里 #102 模拟"评论认领待确认" */
+  var MOCK_PENDING = { 102: "wyf-demo" };
+
+  /* ---- 待确认认领检测: 扫未分配 open 票的评论 ---- */
+  var CLAIM_RE = /^\/认领 @(\S+)/;
+  async function detectPendingClaims(issues) {
+    var pending = {};
+    for (var i = 0; i < issues.length; i++) {
+      var issue = issues[i];
+      if (issue.state !== "open" || (issue.assignees || []).length > 0 || !issue.comments) continue;
+      try {
+        var comments = await TB.api.listComments(state.config.owner, state.config.repo, issue.number);
+        for (var j = comments.length - 1; j >= 0; j--) {
+          var m = (comments[j].body || "").match(CLAIM_RE);
+          if (m) { pending[issue.number] = m[1]; break; }
+        }
+      } catch (_) { /* 单票评论拉取失败不阻塞整个看板 */ }
+    }
+    return pending;
+  }
+
+  /* ---- 加载 ---- */
+  async function refresh(silent) {
+    if (state.loading) return;
+    state.loading = true;
+    if (!silent) banner("加载中…");
+    try {
+      if (state.mock) {
+        state.issues = MOCK_ISSUES;
+        state.pendingClaims = MOCK_PENDING;
+        state.viewer = state.viewer || "wyf-demo";
+        banner("");
+      } else {
+        var token = TB.store.loadToken();
+        if (!token) {
+          state.issues = [];
+          state.viewer = null;
+          banner("首次使用：请点右上角「设置」粘贴 GitHub Token（私有仓库需要它才能读任务）");
+        } else {
+          state.viewer = await TB.api.getUser();
+          state.issues = await TB.api.listIssues(state.config.owner, state.config.repo, state.config.label);
+          state.pendingClaims = await detectPendingClaims(state.issues);
+          banner("");
+        }
+      }
+      document.getElementById("repo-badge").textContent =
+        state.config.owner + "/" + state.config.repo + (state.mock ? "（mock）" : "");
+      document.getElementById("viewer-name").textContent = state.viewer ? "@" + state.viewer : "";
+      TB.renderBoard(state);
+    } catch (err) {
+      banner(err.message || String(err), true);
+    } finally {
+      state.loading = false;
+    }
+  }
+
+  /* ---- 动作(403 降级) ---- */
+  function repoPath(num) {
+    return "/" + encodeURIComponent(state.config.owner) + "/" + encodeURIComponent(state.config.repo) +
+      (num ? "/issues/" + num : "/issues");
+  }
+
+  var actions = {
+    /* 认领: 主路径 PATCH assignees; 403 → 评论标记, 等有权限的人确认 */
+    claim: async function (issue) {
+      try {
+        await TB.api.patchIssue(state.config.owner, state.config.repo, issue.number, { assignees: [state.viewer] });
+        issue.assignees = [{ login: state.viewer }];
+        toast("已认领 #" + issue.number);
+      } catch (err) {
+        if (err.status === 403) {
+          try {
+            await TB.api.addComment(state.config.owner, state.config.repo, issue.number, "/认领 @" + state.viewer);
+            state.pendingClaims[issue.number] = state.viewer;
+            toast("没有直接认领权限，已记录认领，等待负责人确认");
+          } catch (err2) {
+            toast(err2.message || String(err2), true);
+          }
+        } else {
+          toast(err.message || String(err), true);
+        }
+      }
+      TB.renderBoard(state);
+    },
+
+    /* 确认认领: 需 Triage; 403 → 提示 */
+    confirmClaim: async function (issue, login) {
+      try {
+        await TB.api.patchIssue(state.config.owner, state.config.repo, issue.number, { assignees: [login] });
+        issue.assignees = [{ login: login }];
+        delete state.pendingClaims[issue.number];
+        toast("#" + issue.number + " 已确认给 " + login);
+      } catch (err) {
+        toast(err.status === 403 ? "确认认领需要 Triage 权限" : (err.message || String(err)), true);
+      }
+      TB.renderBoard(state);
+    },
+
+    complete: async function (issue) {
+      try {
+        await TB.api.patchIssue(state.config.owner, state.config.repo, issue.number, { state: "closed" });
+        issue.state = "closed";
+        toast("#" + issue.number + " 已完成");
+      } catch (err) {
+        toast(err.status === 403 ? "关闭他人任务需要 Triage 权限" : (err.message || String(err)), true);
+      }
+      TB.renderBoard(state);
+    },
+
+    abandon: async function (issue) {
+      try {
+        await TB.api.patchIssue(state.config.owner, state.config.repo, issue.number, { assignees: [] });
+        issue.assignees = [];
+        toast("已放弃 #" + issue.number);
+      } catch (err) {
+        toast(err.message || String(err), true);
+      }
+      TB.renderBoard(state);
+    },
+
+    reopen: async function (issue) {
+      try {
+        await TB.api.patchIssue(state.config.owner, state.config.repo, issue.number, { state: "open" });
+        issue.state = "open";
+        toast("#" + issue.number + " 已重新打开");
+      } catch (err) {
+        toast(err.message || String(err), true);
+      }
+      TB.renderBoard(state);
+    },
+
+    /* 发布任务; 打 label 403 → 不带 label 重试 */
+    createTask: async function (title, body, priority) {
+      var cfg = state.config;
+      try {
+        await TB.api.createIssue(cfg.owner, cfg.repo, title, body, cfg.label, priority, true);
+        toast("任务已发布");
+      } catch (err) {
+        if (err.status === 403) {
+          await TB.api.createIssue(cfg.owner, cfg.repo, title, body, cfg.label, priority, false);
+          toast("任务已发布，但看板标签未添加（需要 Triage 权限），请手动补打 " + cfg.label, true);
+        } else {
+          throw err;
+        }
+      }
+      await refresh(true);
+    },
+
+    configChanged: function () {
+      state.config = TB.store.loadConfig();
+      state.viewer = null;
+      refresh();
+    }
+  };
+  TB.actions = actions;
+
+  /* ---- 顶栏事件 ---- */
+  document.getElementById("btn-refresh").addEventListener("click", function () { refresh(); });
+  document.getElementById("filter-select").addEventListener("change", function (e) {
+    state.filter = e.target.value;
+    TB.store.saveFilter(state.filter);
+    TB.renderBoard(state);
+  });
+
+  /* ---- 启动 ---- */
+  function safeInit() {
+    try { TB.modals; TB.renderBoard; TB.api; TB.store; } catch (e) {
+      banner("页面模块加载不完整: " + e.message, true);
+      return;
+    }
+    refresh();
+    /* 60s 自动刷新(页面可见时), 限流 5000/h 绰绰有余 */
+    setInterval(function () {
+      if (!document.hidden && !state.mock && TB.store.loadToken()) refresh(true);
+    }, 60000);
+  }
+
+  safeInit();
+})();
+</script>
+</body>
+</html>
