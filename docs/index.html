@@ -322,8 +322,8 @@ body {
     </div>
     <div class="form-row">
       <label for="cfg-token">GitHub Token</label>
-      <input id="cfg-token" type="password" placeholder="fine-grained PAT（仅本浏览器保存）">
-      <p class="form-hint">申请：GitHub → Settings → Developer settings → Fine-grained tokens，仅勾选目标仓库，Issues 权限选 Read and write。Token 只保存在你自己浏览器，不要发给任何人。</p>
+      <input id="cfg-token" type="password" placeholder="classic PAT（ghp_ 开头，仅本浏览器保存）">
+      <p class="form-hint">申请：GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token，Expiration 选 90 天或更长，勾选最上面的 repo 整块（组织私有仓需要它，fine-grained 管不了他人私仓）。Token 只保存在你自己浏览器，不要发给任何人。</p>
     </div>
     <p id="cfg-test-result" class="form-result"></p>
     <div class="modal-actions">
