@@ -39,6 +39,9 @@
   }
 
   async function testConnection() {
+    /* 先落库输入框里的 Token, 保证"测试的就是将要使用的"——否则会拿旧存档去测, 新 Token 永远报无效 */
+    var fieldToken = document.getElementById("cfg-token").value.trim();
+    if (fieldToken) TB.store.saveToken(fieldToken);
     result("cfg-test-result", "测试中…", true);
     var owner = document.getElementById("cfg-owner").value.trim();
     var repo = document.getElementById("cfg-repo").value.trim();
