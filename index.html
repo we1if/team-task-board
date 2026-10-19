@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>任务看板</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-left">
+    <h1 class="topbar-title">任务看板</h1>
+    <span class="repo-badge" id="repo-badge"></span>
+  </div>
+  <div class="topbar-right">
+    <label class="filter-label" for="filter-select">筛选</label>
+    <select id="filter-select" class="filter-select"></select>
+    <span class="viewer-name" id="viewer-name"></span>
+    <button id="btn-refresh" class="btn btn-ghost" type="button">刷新</button>
+    <button id="btn-new-task" class="btn btn-primary" type="button">新建任务</button>
+    <button id="btn-settings" class="btn btn-ghost" type="button">设置</button>
+  </div>
+</header>
+
+<div id="banner" class="banner hidden"></div>
+<main class="board">
+  <section class="col" id="col-todo">
+    <div class="col-head"><h2>待认领</h2><span class="col-count" id="count-todo">0</span></div>
+    <div class="col-body" id="body-todo"></div>
+  </section>
+  <section class="col" id="col-doing">
+    <div class="col-head"><h2>进行中</h2><span class="col-count" id="count-doing">0</span></div>
+    <div class="col-body" id="body-doing"></div>
+  </section>
+  <section class="col" id="col-done">
+    <div class="col-head"><h2>已完成</h2><span class="col-count" id="count-done">0</span></div>
+    <div class="col-body" id="body-done"></div>
+  </section>
+</main>
+
+<div id="overlay-settings" class="overlay hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <h2 id="settings-title" class="modal-title">设置</h2>
+    <div class="form-row">
+      <label for="cfg-owner">仓库 Owner</label>
+      <input id="cfg-owner" type="text" placeholder="如 Mr-G-9527">
+    </div>
+    <div class="form-row">
+      <label for="cfg-repo">仓库名</label>
+      <input id="cfg-repo" type="text" placeholder="如 WellInsight">
+    </div>
+    <div class="form-row">
+      <label for="cfg-label">看板标签</label>
+      <input id="cfg-label" type="text" placeholder="如 board">
+    </div>
+    <div class="form-row">
+      <label for="cfg-token">GitHub Token</label>
+      <input id="cfg-token" type="password" placeholder="fine-grained PAT（仅本浏览器保存）">
+      <p class="form-hint">申请：GitHub → Settings → Developer settings → Fine-grained tokens，仅勾选目标仓库，Issues 权限选 Read and write。Token 只保存在你自己浏览器，不要发给任何人。</p>
+    </div>
+    <p id="cfg-test-result" class="form-result"></p>
+    <div class="modal-actions">
+      <button id="btn-test-conn" class="btn btn-ghost" type="button">测试连接</button>
+      <span class="spacer"></span>
+      <button id="btn-settings-cancel" class="btn btn-ghost" type="button">取消</button>
+      <button id="btn-settings-save" class="btn btn-primary" type="button">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay-new-task" class="overlay hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="new-task-title">
+    <h2 id="new-task-title" class="modal-title">新建任务</h2>
+    <div class="form-row">
+      <label for="nt-title">标题 <span class="req">*</span></label>
+      <input id="nt-title" type="text" placeholder="一句话说清要做什么">
+    </div>
+    <div class="form-row">
+      <label for="nt-body">说明</label>
+      <textarea id="nt-body" rows="5" placeholder="背景、验收标准、相关链接（可选）"></textarea>
+    </div>
+    <div class="form-row">
+      <label for="nt-priority">优先级</label>
+      <select id="nt-priority">
+        <option value="P0">P0 紧急</option>
+        <option value="P1">P1 高</option>
+        <option value="P2" selected>P2 普通</option>
+        <option value="P3">P3 低</option>
+      </select>
+    </div>
+    <p id="nt-error" class="form-result"></p>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button id="btn-nt-cancel" class="btn btn-ghost" type="button">取消</button>
+      <button id="btn-nt-submit" class="btn btn-primary" type="button">发布</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="assets/config.js"></script>
+<script src="assets/api.js"></script>
+<script src="assets/render-board.js"></script>
+<script src="assets/render-modal.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
