@@ -62,6 +62,9 @@
 
     var meta = el("div", "card-meta");
     meta.appendChild(el("span", "card-num", "#" + issue.number));
+    if (state.newNumbers && state.newNumbers[issue.number]) {
+      meta.appendChild(el("span", "chip chip-new", "新"));
+    }
     var names = labelNames(issue);
     names.forEach(function (name) {
       if (name === "blocked") return; /* 下面统一用 blocked 徽标, 不重复出 chip */
@@ -163,6 +166,10 @@
       });
       document.getElementById("count-" + key).textContent = String(buckets[key].length);
     });
+
+    /* 浏览器 tab 标题提示未读新票 */
+    var newCount = Object.keys(state.newNumbers || {}).length;
+    document.title = newCount > 0 ? "(" + newCount + ") 任务看板" : "任务看板";
 
     /* 筛选下拉: 全部 / 我的 / 各负责人 */
     var select = document.getElementById("filter-select");

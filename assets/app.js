@@ -9,10 +9,27 @@
     viewer: null,
     filter: TB.store.loadFilter(),
     pendingClaims: {},   /* issue 号 -> 待确认认领人 login */
+    newNumbers: {},      /* issue 号 -> true, 上次访问之后新建的票(点开详情即消) */
     loading: false,
     mock: new URLSearchParams(location.search).get("mock") === "1"
   };
   TB.state = state;
+
+  /* 新票感知: 基线 = 已见过的最新 created_at(跨会话存 localStorage); 点开过详情的票号也记档
+     两段式: 标记阶段基线固定为上次存储值, 防止边扫边抬基线漏标中途的票 */
+  function updateNewNumbers(issues) {
+    var seenNums = TB.store.loadSeenNums();
+    var seen = {};
+    seenNums.forEach(function (n) { seen[n] = true; });
+    var baseline = TB.store.loadLastSeen() ? new Date(TB.store.loadLastSeen()).getTime() : 0;
+    var maxAll = baseline;
+    issues.forEach(function (issue) {
+      var t = new Date(issue.created_at).getTime();
+      if (t > baseline && !seen[issue.number]) state.newNumbers[issue.number] = true;
+      if (t > maxAll) maxAll = t;
+    });
+    TB.store.saveLastSeen(new Date(maxAll).toISOString());
+  }
 
   /* ---- 轻提示 / 横幅 ---- */
   var toastTimer = null;
@@ -109,6 +126,7 @@
       document.getElementById("repo-badge").textContent =
         state.config.owner + "/" + state.config.repo + (state.mock ? "（mock）" : "");
       document.getElementById("viewer-name").textContent = state.viewer ? "@" + state.viewer : "";
+      updateNewNumbers(state.issues);
       TB.renderBoard(state);
     } catch (err) {
       banner(err.message || String(err), true);

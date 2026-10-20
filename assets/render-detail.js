@@ -63,6 +63,12 @@
 
   function openDetail(issue) {
     current = issue;
+    /* 点开即已读: 清「新」标记并存档(重载页面不复标) */
+    if (TB.state && TB.state.newNumbers && TB.state.newNumbers[issue.number]) {
+      delete TB.state.newNumbers[issue.number];
+      TB.store.markSeen(issue.number);
+      if (TB.renderBoard) TB.renderBoard(TB.state);
+    }
     logLoaded = false;
     $("dt-timeline").textContent = "";
     $("dt-timeline").appendChild(el("div", "dt-empty", "切到「记录」页时加载"));

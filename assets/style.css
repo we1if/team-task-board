@@ -178,6 +178,7 @@ body {
   padding: 0 6px;
 }
 .chip-done { color: #fff; background: var(--sage); border-color: var(--sage); }
+.chip-new { color: #fff; background: var(--slate); border-color: var(--slate); font-weight: 600; }
 
 /* ---- 弹窗 ---- */
 .overlay {

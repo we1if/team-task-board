@@ -43,6 +43,23 @@
   function loadFilter() { return safeGet("tb-filter") || "all"; }
   function saveFilter(value) { safeSet("tb-filter", value); }
 
+  /* 新票感知基线: 上次已见到的最新 created_at; seenNums = 点开过详情的票号 */
+  function loadLastSeen() { return safeGet("tb-last-seen") || ""; }
+  function saveLastSeen(iso) { safeSet("tb-last-seen", iso); }
+  function loadSeenNums() {
+    var raw = safeGet("tb-seen-nums");
+    if (!raw) return [];
+    try { return JSON.parse(raw) || []; } catch (_) { return []; }
+  }
+  function markSeen(num) {
+    var arr = loadSeenNums();
+    if (arr.indexOf(num) === -1) {
+      arr.push(num);
+      if (arr.length > 200) arr = arr.slice(-200);  /* 防无限增长 */
+      safeSet("tb-seen-nums", JSON.stringify(arr));
+    }
+  }
+
   TB.store = {
     DEFAULT_CONFIG: DEFAULT_CONFIG,
     loadConfig: loadConfig,
@@ -50,6 +67,10 @@
     loadToken: loadToken,
     saveToken: saveToken,
     loadFilter: loadFilter,
-    saveFilter: saveFilter
+    saveFilter: saveFilter,
+    loadLastSeen: loadLastSeen,
+    saveLastSeen: saveLastSeen,
+    loadSeenNums: loadSeenNums,
+    markSeen: markSeen
   };
 })();

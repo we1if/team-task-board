@@ -185,6 +185,7 @@ body {
   padding: 0 6px;
 }
 .chip-done { color: #fff; background: var(--sage); border-color: var(--sage); }
+.chip-new { color: #fff; background: var(--slate); border-color: var(--slate); font-weight: 600; }
 
 /* ---- 弹窗 ---- */
 .overlay {
@@ -551,6 +552,23 @@ body {
   function loadFilter() { return safeGet("tb-filter") || "all"; }
   function saveFilter(value) { safeSet("tb-filter", value); }
 
+  /* 新票感知基线: 上次已见到的最新 created_at; seenNums = 点开过详情的票号 */
+  function loadLastSeen() { return safeGet("tb-last-seen") || ""; }
+  function saveLastSeen(iso) { safeSet("tb-last-seen", iso); }
+  function loadSeenNums() {
+    var raw = safeGet("tb-seen-nums");
+    if (!raw) return [];
+    try { return JSON.parse(raw) || []; } catch (_) { return []; }
+  }
+  function markSeen(num) {
+    var arr = loadSeenNums();
+    if (arr.indexOf(num) === -1) {
+      arr.push(num);
+      if (arr.length > 200) arr = arr.slice(-200);  /* 防无限增长 */
+      safeSet("tb-seen-nums", JSON.stringify(arr));
+    }
+  }
+
   TB.store = {
     DEFAULT_CONFIG: DEFAULT_CONFIG,
     loadConfig: loadConfig,
@@ -558,7 +576,11 @@ body {
     loadToken: loadToken,
     saveToken: saveToken,
     loadFilter: loadFilter,
-    saveFilter: saveFilter
+    saveFilter: saveFilter,
+    loadLastSeen: loadLastSeen,
+    saveLastSeen: saveLastSeen,
+    loadSeenNums: loadSeenNums,
+    markSeen: markSeen
   };
 })();
 
@@ -756,6 +778,9 @@ body {
 
     var meta = el("div", "card-meta");
     meta.appendChild(el("span", "card-num", "#" + issue.number));
+    if (state.newNumbers && state.newNumbers[issue.number]) {
+      meta.appendChild(el("span", "chip chip-new", "新"));
+    }
     var names = labelNames(issue);
     names.forEach(function (name) {
       if (name === "blocked") return; /* 下面统一用 blocked 徽标, 不重复出 chip */
@@ -857,6 +882,10 @@ body {
       });
       document.getElementById("count-" + key).textContent = String(buckets[key].length);
     });
+
+    /* 浏览器 tab 标题提示未读新票 */
+    var newCount = Object.keys(state.newNumbers || {}).length;
+    document.title = newCount > 0 ? "(" + newCount + ") 任务看板" : "任务看板";
 
     /* 筛选下拉: 全部 / 我的 / 各负责人 */
     var select = document.getElementById("filter-select");
@@ -1261,6 +1290,12 @@ body {
 
   function openDetail(issue) {
     current = issue;
+    /* 点开即已读: 清「新」标记并存档(重载页面不复标) */
+    if (TB.state && TB.state.newNumbers && TB.state.newNumbers[issue.number]) {
+      delete TB.state.newNumbers[issue.number];
+      TB.store.markSeen(issue.number);
+      if (TB.renderBoard) TB.renderBoard(TB.state);
+    }
     logLoaded = false;
     $("dt-timeline").textContent = "";
     $("dt-timeline").appendChild(el("div", "dt-empty", "切到「记录」页时加载"));
@@ -1429,10 +1464,27 @@ body {
     viewer: null,
     filter: TB.store.loadFilter(),
     pendingClaims: {},   /* issue 号 -> 待确认认领人 login */
+    newNumbers: {},      /* issue 号 -> true, 上次访问之后新建的票(点开详情即消) */
     loading: false,
     mock: new URLSearchParams(location.search).get("mock") === "1"
   };
   TB.state = state;
+
+  /* 新票感知: 基线 = 已见过的最新 created_at(跨会话存 localStorage); 点开过详情的票号也记档
+     两段式: 标记阶段基线固定为上次存储值, 防止边扫边抬基线漏标中途的票 */
+  function updateNewNumbers(issues) {
+    var seenNums = TB.store.loadSeenNums();
+    var seen = {};
+    seenNums.forEach(function (n) { seen[n] = true; });
+    var baseline = TB.store.loadLastSeen() ? new Date(TB.store.loadLastSeen()).getTime() : 0;
+    var maxAll = baseline;
+    issues.forEach(function (issue) {
+      var t = new Date(issue.created_at).getTime();
+      if (t > baseline && !seen[issue.number]) state.newNumbers[issue.number] = true;
+      if (t > maxAll) maxAll = t;
+    });
+    TB.store.saveLastSeen(new Date(maxAll).toISOString());
+  }
 
   /* ---- 轻提示 / 横幅 ---- */
   var toastTimer = null;
@@ -1529,6 +1581,7 @@ body {
       document.getElementById("repo-badge").textContent =
         state.config.owner + "/" + state.config.repo + (state.mock ? "（mock）" : "");
       document.getElementById("viewer-name").textContent = state.viewer ? "@" + state.viewer : "";
+      updateNewNumbers(state.issues);
       TB.renderBoard(state);
     } catch (err) {
       banner(err.message || String(err), true);
