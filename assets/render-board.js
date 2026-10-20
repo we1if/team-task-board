@@ -167,10 +167,6 @@
       document.getElementById("count-" + key).textContent = String(buckets[key].length);
     });
 
-    /* 浏览器 tab 标题提示未读新票 */
-    var newCount = Object.keys(state.newNumbers || {}).length;
-    document.title = newCount > 0 ? "(" + newCount + ") 任务看板" : "任务看板";
-
     /* 筛选下拉: 全部 / 我的 / 各负责人 */
     var select = document.getElementById("filter-select");
     var current = state.filter;
