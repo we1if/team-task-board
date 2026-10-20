@@ -16,12 +16,27 @@
 
   /* ---- 轻提示 / 横幅 ---- */
   var toastTimer = null;
-  function toast(text, isErr) {
+  /* action = {label, fn} 时 toast 带一个操作按钮(如完成后的撤销), 6s 后自动消失 */
+  function toast(text, isErr, action) {
     var node = document.getElementById("toast");
+    var oldBtn = node.querySelector(".toast-action");
+    if (oldBtn) oldBtn.remove();
     node.textContent = text;
+    if (action) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "toast-action";
+      btn.textContent = action.label;
+      btn.addEventListener("click", function () {
+        clearTimeout(toastTimer);
+        node.classList.add("hidden");
+        action.fn();
+      });
+      node.appendChild(btn);
+    }
     node.className = "toast" + (isErr ? " toast-err" : "");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { node.classList.add("hidden"); }, 3500);
+    toastTimer = setTimeout(function () { node.classList.add("hidden"); }, action ? 6000 : 3500);
   }
   TB.toast = toast;       /* 供导入等子模块复用 */
   TB.refresh = refresh;   /* 导入完成后刷新看板(refresh 定义在后, 函数声明提升) */
@@ -148,11 +163,12 @@
       try {
         await TB.api.patchIssue(state.config.owner, state.config.repo, issue.number, { state: "closed" });
         issue.state = "closed";
-        toast("#" + issue.number + " 已完成");
+        TB.renderBoard(state);
+        toast("#" + issue.number + " 已完成", false,
+          { label: "撤销", fn: function () { TB.actions.reopen(issue); } });
       } catch (err) {
         toast(err.status === 403 ? "关闭他人任务需要 Triage 权限" : (err.message || String(err)), true);
       }
-      TB.renderBoard(state);
     },
 
     abandon: async function (issue) {

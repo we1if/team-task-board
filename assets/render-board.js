@@ -44,6 +44,15 @@
     return (issue.labels || []).map(function (l) { return l.name || l; });
   }
 
+  /* 列内排序: P0>P1>P2>P3, 无优先级垫底; 同级依赖上游 updated 倒序(排序稳定) */
+  function prioRank(issue) {
+    var names = labelNames(issue);
+    for (var i = 0; i < 4; i++) {
+      if (names.indexOf("P" + i) !== -1) return i;
+    }
+    return 4;
+  }
+
   function buildCard(issue, state) {
     var cancelled = issue.state === "closed" && issue.state_reason === "not_planned";
     var card = el("div", "card card-click");
@@ -144,6 +153,7 @@
       if (!buckets[key].length) {
         body.appendChild(el("div", "col-empty", key === "todo" ? "暂无待认领任务" : key === "doing" ? "暂无进行中任务" : "暂无已完成任务"));
       }
+      buckets[key].sort(function (a, b) { return prioRank(a) - prioRank(b); });
       buckets[key].forEach(function (issue) {
         body.appendChild(buildCard(issue, state));
       });

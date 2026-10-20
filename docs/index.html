@@ -298,6 +298,8 @@ body {
 }
 .dt-empty { color: var(--ink-2); opacity: 0.55; text-align: center; padding: 12px 0; font-size: 13px; }
 .dt-err { color: var(--clay); opacity: 1; }
+.dt-gh-link { font-size: 12px; color: var(--slate); flex-shrink: 0; }
+.dt-gh-link:hover { color: var(--ink); }
 
 /* ---- Toast ---- */
 .toast {
@@ -314,6 +316,18 @@ body {
   max-width: 80vw;
 }
 .toast.toast-err { background: var(--clay); }
+.toast-action {
+  margin-left: 10px;
+  font: inherit;
+  font-size: 12px;
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius);
+  padding: 2px 10px;
+  cursor: pointer;
+}
+.toast-action:hover { border-color: #fff; }
 
 /* ---- 焦点可见 & 动效 ---- */
 :focus-visible { outline: 2px solid var(--slate); outline-offset: 1px; }
@@ -444,6 +458,7 @@ body {
     <div class="detail-head">
       <h2 id="dt-title" class="modal-title"></h2>
       <span id="dt-num" class="card-num"></span>
+      <a id="dt-gh-link" class="dt-gh-link" href="#" target="_blank" rel="noopener noreferrer">GitHub 原文 ↗</a>
     </div>
     <div id="dt-meta" class="card-meta detail-meta"></div>
     <div class="tabs">
@@ -723,6 +738,15 @@ body {
     return (issue.labels || []).map(function (l) { return l.name || l; });
   }
 
+  /* 列内排序: P0>P1>P2>P3, 无优先级垫底; 同级依赖上游 updated 倒序(排序稳定) */
+  function prioRank(issue) {
+    var names = labelNames(issue);
+    for (var i = 0; i < 4; i++) {
+      if (names.indexOf("P" + i) !== -1) return i;
+    }
+    return 4;
+  }
+
   function buildCard(issue, state) {
     var cancelled = issue.state === "closed" && issue.state_reason === "not_planned";
     var card = el("div", "card card-click");
@@ -823,6 +847,7 @@ body {
       if (!buckets[key].length) {
         body.appendChild(el("div", "col-empty", key === "todo" ? "暂无待认领任务" : key === "doing" ? "暂无进行中任务" : "暂无已完成任务"));
       }
+      buckets[key].sort(function (a, b) { return prioRank(a) - prioRank(b); });
       buckets[key].forEach(function (issue) {
         body.appendChild(buildCard(issue, state));
       });
@@ -1217,6 +1242,7 @@ body {
   function fillView(issue) {
     $("dt-title").textContent = issue.title;
     $("dt-num").textContent = "#" + issue.number;
+    $("dt-gh-link").href = "https://github.com/" + cfg().owner + "/" + cfg().repo + "/issues/" + issue.number;
     var meta = $("dt-meta");
     meta.textContent = "";
     (issue.labels || []).forEach(function (l) {
@@ -1406,12 +1432,27 @@ body {
 
   /* ---- 轻提示 / 横幅 ---- */
   var toastTimer = null;
-  function toast(text, isErr) {
+  /* action = {label, fn} 时 toast 带一个操作按钮(如完成后的撤销), 6s 后自动消失 */
+  function toast(text, isErr, action) {
     var node = document.getElementById("toast");
+    var oldBtn = node.querySelector(".toast-action");
+    if (oldBtn) oldBtn.remove();
     node.textContent = text;
+    if (action) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "toast-action";
+      btn.textContent = action.label;
+      btn.addEventListener("click", function () {
+        clearTimeout(toastTimer);
+        node.classList.add("hidden");
+        action.fn();
+      });
+      node.appendChild(btn);
+    }
     node.className = "toast" + (isErr ? " toast-err" : "");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { node.classList.add("hidden"); }, 3500);
+    toastTimer = setTimeout(function () { node.classList.add("hidden"); }, action ? 6000 : 3500);
   }
   TB.toast = toast;       /* 供导入等子模块复用 */
   TB.refresh = refresh;   /* 导入完成后刷新看板(refresh 定义在后, 函数声明提升) */
@@ -1538,11 +1579,12 @@ body {
       try {
         await TB.api.patchIssue(state.config.owner, state.config.repo, issue.number, { state: "closed" });
         issue.state = "closed";
-        toast("#" + issue.number + " 已完成");
+        TB.renderBoard(state);
+        toast("#" + issue.number + " 已完成", false,
+          { label: "撤销", fn: function () { TB.actions.reopen(issue); } });
       } catch (err) {
         toast(err.status === 403 ? "关闭他人任务需要 Triage 权限" : (err.message || String(err)), true);
       }
-      TB.renderBoard(state);
     },
 
     abandon: async function (issue) {

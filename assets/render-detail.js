@@ -48,6 +48,7 @@
   function fillView(issue) {
     $("dt-title").textContent = issue.title;
     $("dt-num").textContent = "#" + issue.number;
+    $("dt-gh-link").href = "https://github.com/" + cfg().owner + "/" + cfg().repo + "/issues/" + issue.number;
     var meta = $("dt-meta");
     meta.textContent = "";
     (issue.labels || []).forEach(function (l) {
