@@ -53,13 +53,13 @@
     return new Date(Date.now() - minutes * 60000).toISOString();
   }
   var MOCK_ISSUES = [
-    { number: 101, title: "整理 10 月第一周 POF 日报数据口径", state: "open", assignees: [], labels: [{ name: "P1" }, { name: "数据" }], created_at: nowAgo(3000), updated_at: nowAgo(3000) },
-    { number: 102, title: "修复周报里 AT 利用率曲线断点", state: "open", assignees: [], labels: [{ name: "P0" }, { name: "开发" }], created_at: nowAgo(1500), updated_at: nowAgo(40) },
-    { number: 103, title: "仿真数据 C1 入门引导文档评审", state: "open", assignees: [], labels: [{ name: "P2" }, { name: "blocked" }], created_at: nowAgo(6000), updated_at: nowAgo(120) },
-    { number: 104, title: " heatmap 色标量化 legend 对齐 Tableau", state: "open", assignees: [{ login: "wyf-demo" }], labels: [{ name: "P1" }], created_at: nowAgo(8000), updated_at: nowAgo(200) },
-    { number: 105, title: "跨港对比 demo 数据源覆盖矩阵核对", state: "open", assignees: [{ login: "wyf-demo" }], labels: [{ name: "P2" }, { name: "wayfinder:task" }], created_at: nowAgo(9000), updated_at: nowAgo(30) },
-    { number: 100, title: "9 月值班 bot 链路适配", state: "closed", state_reason: "completed", assignees: [{ login: "wyf-demo" }], labels: [{ name: "P2" }], created_at: nowAgo(20000), updated_at: nowAgo(2000) },
-    { number: 106, title: "重复发布的测试票(示例注销)", state: "closed", state_reason: "not_planned", assignees: [], labels: [{ name: "P2" }], created_at: nowAgo(10000), updated_at: nowAgo(100) }
+    { number: 101, title: "整理 10 月第一周 POF 日报数据口径", state: "open", user: { login: "g" }, assignees: [], labels: [{ name: "P1" }, { name: "数据" }], created_at: nowAgo(3000), updated_at: nowAgo(3000) },
+    { number: 102, title: "修复周报里 AT 利用率曲线断点", state: "open", user: { login: "g" }, assignees: [], labels: [{ name: "P0" }, { name: "开发" }], created_at: nowAgo(1500), updated_at: nowAgo(40) },
+    { number: 103, title: "仿真数据 C1 入门引导文档评审", state: "open", user: { login: "g" }, assignees: [], labels: [{ name: "P2" }, { name: "blocked" }], created_at: nowAgo(6000), updated_at: nowAgo(120) },
+    { number: 104, title: " heatmap 色标量化 legend 对齐 Tableau", state: "open", user: { login: "g" }, assignees: [{ login: "wyf-demo" }], labels: [{ name: "P1" }], created_at: nowAgo(8000), updated_at: nowAgo(200) },
+    { number: 105, title: "跨港对比 demo 数据源覆盖矩阵核对", state: "open", user: { login: "g" }, assignees: [{ login: "wyf-demo" }], labels: [{ name: "P2" }, { name: "wayfinder:task" }], created_at: nowAgo(9000), updated_at: nowAgo(30) },
+    { number: 100, title: "9 月值班 bot 链路适配", state: "closed", state_reason: "completed", user: { login: "g" }, assignees: [{ login: "wyf-demo" }], labels: [{ name: "P2" }], created_at: nowAgo(20000), updated_at: nowAgo(2000) },
+    { number: 106, title: "重复发布的测试票(示例注销)", state: "closed", state_reason: "not_planned", user: { login: "g" }, assignees: [], labels: [{ name: "P2" }], created_at: nowAgo(10000), updated_at: nowAgo(100) }
   ];
   /* mock 里 #102 模拟"评论认领待确认" */
   var MOCK_PENDING = { 102: "wyf-demo" };
@@ -171,10 +171,14 @@
       }
     },
 
+    /* 放弃: 只移除自己, 不动其他负责人(多人同票场景) */
     abandon: async function (issue) {
       try {
-        await TB.api.patchIssue(state.config.owner, state.config.repo, issue.number, { assignees: [] });
-        issue.assignees = [];
+        var remaining = (issue.assignees || [])
+          .filter(function (a) { return a.login !== state.viewer; })
+          .map(function (a) { return a.login; });
+        await TB.api.patchIssue(state.config.owner, state.config.repo, issue.number, { assignees: remaining });
+        issue.assignees = remaining.map(function (login) { return { login: login }; });
         toast("已放弃 #" + issue.number);
       } catch (err) {
         toast(err.message || String(err), true);

@@ -80,6 +80,9 @@
     card.appendChild(el("div", "card-title" + (cancelled ? " card-title-cancelled" : ""), issue.title));
 
     var foot = el("div", "card-meta");
+    if (issue.user && issue.user.login) {
+      foot.appendChild(el("span", "card-assignee", "@" + issue.user.login + " 发布"));
+    }
     var assignees = issue.assignees || [];
     if (assignees.length) {
       foot.appendChild(el("span", "card-assignee",
@@ -106,7 +109,8 @@
         }));
       }
     } else if (issue.state === "open" && assignees.length > 0) {
-      var mine = state.viewer && assignees.length === 1 && assignees[0].login === state.viewer;
+      /* 多人可同票(GitHub 认领是合并语义), 只要是负责人之一就能完成/放弃 */
+      var mine = state.viewer && assignees.some(function (a) { return a.login === state.viewer; });
       if (mine) {
         actions.appendChild(actionButton("完成", "btn-primary", function () {
           TB.actions.complete(issue);
