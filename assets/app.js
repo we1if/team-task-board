@@ -170,7 +170,7 @@
       try {
         await TB.api.patchIssue(state.config.owner, state.config.repo, issue.number, { state: "open" });
         issue.state = "open";
-        toast("#" + issue.number + " 已重新打开");
+        toast("#" + issue.number + " 已重开");
       } catch (err) {
         toast(err.message || String(err), true);
       }

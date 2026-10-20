@@ -107,7 +107,7 @@
         }));
       }
     } else if (issue.state === "closed") {
-      actions.appendChild(actionButton("重新打开", "", function () {
+      actions.appendChild(actionButton("重开", "", function () {
         TB.actions.reopen(issue);
       }));
     }
