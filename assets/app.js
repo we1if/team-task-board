@@ -43,7 +43,8 @@
     { number: 103, title: "仿真数据 C1 入门引导文档评审", state: "open", assignees: [], labels: [{ name: "P2" }, { name: "blocked" }], created_at: nowAgo(6000), updated_at: nowAgo(120) },
     { number: 104, title: " heatmap 色标量化 legend 对齐 Tableau", state: "open", assignees: [{ login: "wyf-demo" }], labels: [{ name: "P1" }], created_at: nowAgo(8000), updated_at: nowAgo(200) },
     { number: 105, title: "跨港对比 demo 数据源覆盖矩阵核对", state: "open", assignees: [{ login: "wyf-demo" }], labels: [{ name: "P2" }, { name: "wayfinder:task" }], created_at: nowAgo(9000), updated_at: nowAgo(30) },
-    { number: 100, title: "9 月值班 bot 链路适配", state: "closed", assignees: [{ login: "wyf-demo" }], labels: [{ name: "P2" }], created_at: nowAgo(20000), updated_at: nowAgo(2000) }
+    { number: 100, title: "9 月值班 bot 链路适配", state: "closed", state_reason: "completed", assignees: [{ login: "wyf-demo" }], labels: [{ name: "P2" }], created_at: nowAgo(20000), updated_at: nowAgo(2000) },
+    { number: 106, title: "重复发布的测试票(示例注销)", state: "closed", state_reason: "not_planned", assignees: [], labels: [{ name: "P2" }], created_at: nowAgo(10000), updated_at: nowAgo(100) }
   ];
   /* mock 里 #102 模拟"评论认领待确认" */
   var MOCK_PENDING = { 102: "wyf-demo" };

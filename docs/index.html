@@ -247,6 +247,58 @@ body {
 .imp-err { color: var(--clay); }
 .imp-limit { font-size: 12px; margin-bottom: 6px; }
 
+/* ---- 任务详情 ---- */
+.detail-head { display: flex; align-items: baseline; gap: 8px; }
+.detail-meta { margin-bottom: 10px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+.tab {
+  font: inherit;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--ink-2);
+}
+.tab:hover { color: var(--ink); }
+.tab-active { color: var(--ink); border-bottom-color: var(--slate); font-weight: 600; }
+.detail-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  color: var(--ink);
+  min-height: 40px;
+}
+.card-click { cursor: pointer; }
+.card-click:hover { border-color: var(--slate); }
+.card-title-cancelled { text-decoration: line-through; opacity: 0.6; }
+.chip-cancelled { color: var(--ink-2); background: var(--paper); border: 1px solid var(--line); }
+.dt-timeline {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+.dt-log-row { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; }
+.dt-log-who { color: var(--slate); flex-shrink: 0; }
+.dt-log-what { color: var(--ink-2); word-break: break-word; }
+.dt-log-time { margin-left: auto; color: var(--ink-2); opacity: 0.6; font-size: 12px; flex-shrink: 0; }
+.dt-log-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  margin: 2px 0 6px;
+}
+.dt-empty { color: var(--ink-2); opacity: 0.55; text-align: center; padding: 12px 0; font-size: 13px; }
+.dt-err { color: var(--clay); opacity: 1; }
+
 /* ---- Toast ---- */
 .toast {
   position: fixed;
@@ -383,6 +435,55 @@ body {
       <button id="btn-imp-cancel" class="btn btn-ghost" type="button">取消</button>
       <button id="btn-imp-parse" class="btn" type="button">解析预览</button>
       <button id="btn-imp-confirm" class="btn btn-primary" type="button" disabled>确认导入</button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay-detail" class="overlay hidden">
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="dt-title">
+    <div class="detail-head">
+      <h2 id="dt-title" class="modal-title"></h2>
+      <span id="dt-num" class="card-num"></span>
+    </div>
+    <div id="dt-meta" class="card-meta detail-meta"></div>
+    <div class="tabs">
+      <button id="tab-detail" class="tab tab-active" type="button">详情</button>
+      <button id="tab-log" class="tab" type="button">记录</button>
+    </div>
+    <div id="pane-detail">
+      <div id="dt-body" class="detail-body"></div>
+      <p id="dt-error" class="form-result"></p>
+    </div>
+    <div id="pane-edit" class="hidden">
+      <div class="form-row">
+        <label for="ed-title">标题</label>
+        <input id="ed-title" type="text">
+      </div>
+      <div class="form-row">
+        <label for="ed-body">说明</label>
+        <textarea id="ed-body" rows="6"></textarea>
+      </div>
+      <div class="modal-actions">
+        <span class="spacer"></span>
+        <button id="btn-ed-cancel" class="btn btn-ghost" type="button">取消</button>
+        <button id="btn-ed-save" class="btn btn-primary" type="button">保存</button>
+      </div>
+    </div>
+    <div id="pane-log" class="hidden">
+      <div id="dt-timeline" class="dt-timeline"></div>
+      <div class="form-row">
+        <textarea id="dt-comment" rows="3" placeholder="留言:进度、反馈、问题…"></textarea>
+      </div>
+      <div class="modal-actions">
+        <span class="spacer"></span>
+        <button id="btn-dt-comment" class="btn btn-primary" type="button">发送评论</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button id="btn-dt-edit" class="btn" type="button">编辑</button>
+      <button id="btn-dt-cancel-issue" class="btn" type="button">注销任务</button>
+      <span class="spacer"></span>
+      <button id="btn-dt-close" class="btn btn-ghost" type="button">关闭</button>
     </div>
   </div>
 </div>
@@ -558,6 +659,12 @@ body {
       "/issues/" + num + "/comments?per_page=100");
   }
 
+  /* 任务动态事件流: assigned/closed/reopened/edited/commented 等, commented 事件自带 body */
+  async function getTimeline(owner, repo, num) {
+    return ghFetch("/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) +
+      "/issues/" + num + "/timeline?per_page=100");
+  }
+
   TB.api = {
     getUser: getUser,
     getRepo: getRepo,
@@ -565,7 +672,8 @@ body {
     createIssue: createIssue,
     patchIssue: patchIssue,
     addComment: addComment,
-    listComments: listComments
+    listComments: listComments,
+    getTimeline: getTimeline
   };
 })();
 
@@ -602,7 +710,11 @@ body {
   function actionButton(text, className, onClick) {
     var btn = el("button", "btn btn-small " + className, text);
     btn.type = "button";
-    btn.addEventListener("click", onClick);
+    /* 整卡可点开详情, 按钮先阻断冒泡 */
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      onClick();
+    });
     return btn;
   }
 
@@ -612,7 +724,11 @@ body {
   }
 
   function buildCard(issue, state) {
-    var card = el("div", "card");
+    var cancelled = issue.state === "closed" && issue.state_reason === "not_planned";
+    var card = el("div", "card card-click");
+    card.addEventListener("click", function () {
+      if (TB.modals && TB.modals.openDetail) TB.modals.openDetail(issue);
+    });
 
     var meta = el("div", "card-meta");
     meta.appendChild(el("span", "card-num", "#" + issue.number));
@@ -625,11 +741,13 @@ body {
       meta.appendChild(el("span", "chip badge-blocked", "blocked"));
     }
     if (issue.state === "closed") {
-      meta.appendChild(el("span", "chip chip-done", "已完成"));
+      meta.appendChild(cancelled
+        ? el("span", "chip chip-cancelled", "已注销")
+        : el("span", "chip chip-done", "已完成"));
     }
     card.appendChild(meta);
 
-    card.appendChild(el("div", "card-title", issue.title));
+    card.appendChild(el("div", "card-title" + (cancelled ? " card-title-cancelled" : ""), issue.title));
 
     var foot = el("div", "card-meta");
     var assignees = issue.assignees || [];
@@ -685,6 +803,8 @@ body {
     if (issue.state === "open" && assignees.length === 0) return false; /* 未认领票不属于任何人 */
     return assignees.some(function (a) { return a.login === who; });
   }
+
+  TB.relTime = relTime; /* 详情弹窗复用 */
 
   TB.renderBoard = function (state) {
     var buckets = { todo: [], doing: [], done: [] };
@@ -1047,6 +1167,227 @@ body {
   });
 })();
 
+/* 弹窗: 任务详情 — 详情/记录双 tab + 编辑(标题/说明) + 注销(state_reason=not_planned) + 评论
+   记录 = GitHub 原生 timeline 事件流(认领/关闭/编辑/评论自动留痕, 不自建存储) */
+(function () {
+  "use strict";
+  window.TB = window.TB || {};
+
+  var current = null;   /* 正在查看的 issue(state.issues 成员引用, 变更后原位更新) */
+  var logLoaded = false;
+
+  function $(id) { return document.getElementById(id); }
+  function show(id) { $(id).classList.remove("hidden"); }
+  function hide(id) { $(id).classList.add("hidden"); }
+  function result(text, ok) {
+    var node = $("dt-error");
+    node.textContent = text;
+    node.className = "form-result " + (ok ? "ok" : "err");
+  }
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined && text !== null) n.textContent = text;
+    return n;
+  }
+  function relTime(iso) { return TB.relTime ? TB.relTime(iso) : ""; }
+  function cfg() { return TB.state.config; }
+
+  /* ---- tab 切换 ---- */
+  var PANES = { detail: "pane-detail", edit: "pane-edit", log: "pane-log" };
+  var TABS = { detail: "tab-detail", log: "tab-log" };
+  function selectTab(name) {
+    Object.keys(PANES).forEach(function (key) {
+      if (key === name) show(PANES[key]); else hide(PANES[key]);
+    });
+    Object.keys(TABS).forEach(function (key) {
+      $(TABS[key]).className = "tab" + (key === name ? " tab-active" : "");
+    });
+  }
+
+  /* ---- 详情 pane ---- */
+  function statusText(issue) {
+    if (issue.state === "closed") {
+      return issue.state_reason === "not_planned" ? "已注销" : "已完成";
+    }
+    var names = (issue.assignees || []).map(function (a) { return a.login; });
+    return names.length ? "进行中 · 负责人 @" + names.join(", @") : "待认领";
+  }
+
+  function fillView(issue) {
+    $("dt-title").textContent = issue.title;
+    $("dt-num").textContent = "#" + issue.number;
+    var meta = $("dt-meta");
+    meta.textContent = "";
+    (issue.labels || []).forEach(function (l) {
+      meta.appendChild(el("span", "chip", l.name || l));
+    });
+    meta.appendChild(el("span", "chip chip-cancelled", statusText(issue)));
+    meta.appendChild(el("span", "card-age", "更新于 " + relTime(issue.updated_at)));
+    $("dt-body").textContent = issue.body || "(无说明)";
+    $("btn-dt-edit").classList.toggle("hidden", issue.state !== "open");
+    $("btn-dt-cancel-issue").classList.toggle("hidden", issue.state !== "open");
+  }
+
+  function openDetail(issue) {
+    current = issue;
+    logLoaded = false;
+    $("dt-timeline").textContent = "";
+    $("dt-timeline").appendChild(el("div", "dt-empty", "切到「记录」页时加载"));
+    $("dt-comment").value = "";
+    result("", true);
+    fillView(issue);
+    selectTab("detail");
+    show("overlay-detail");
+  }
+
+  /* ---- 编辑 ---- */
+  function openEdit() {
+    $("ed-title").value = current.title;
+    $("ed-body").value = current.body || "";
+    result("", true);
+    selectTab("edit");
+    $("ed-title").focus();
+  }
+
+  async function saveEdit() {
+    var title = $("ed-title").value.trim();
+    if (!title) { result("标题不能为空", false); return; }
+    var body = $("ed-body").value;
+    var btn = $("btn-ed-save");
+    btn.disabled = true;
+    try {
+      await TB.api.patchIssue(cfg().owner, cfg().repo, current.number, { title: title, body: body });
+      current.title = title;
+      current.body = body;
+      fillView(current);
+      TB.renderBoard(TB.state);
+      selectTab("detail");
+      result("已保存", true);
+    } catch (err) {
+      result(err.status === 403 ? "没有编辑权限(只能编辑自己发布的任务)" : (err.message || String(err)), false);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  /* ---- 注销: 关闭 + 原生 not_planned 标记, 不发评论 ---- */
+  async function cancelIssue() {
+    if (!window.confirm("确定注销该任务?将关闭并标为「已注销」,之后可重新打开。")) return;
+    var btn = $("btn-dt-cancel-issue");
+    btn.disabled = true;
+    try {
+      await TB.api.patchIssue(cfg().owner, cfg().repo, current.number,
+        { state: "closed", state_reason: "not_planned" });
+      current.state = "closed";
+      current.state_reason = "not_planned";
+      TB.toast("已注销 #" + current.number);
+      hide("overlay-detail");
+      TB.renderBoard(TB.state);
+      if (TB.refresh) TB.refresh(true);
+    } catch (err) {
+      result(err.status === 403 ? "没有关闭该任务的权限" : (err.message || String(err)), false);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  /* ---- 记录 pane: timeline 事件流 ---- */
+  function textFor(ev) {
+    switch (ev.event) {
+      case "assigned": return "认领给 @" + (ev.assignee && ev.assignee.login || "?");
+      case "unassigned": return "移除负责人 @" + (ev.assignee && ev.assignee.login || "?");
+      case "closed": return ev.state_reason === "not_planned" ? "注销了任务" : "完成了任务";
+      case "reopened": return "重新打开了任务";
+      case "edited": return "编辑了标题/说明";
+      case "labeled": return "加了标签「" + (ev.label && ev.label.name || "?") + "」";
+      case "unlabeled": return "移除了标签「" + (ev.label && ev.label.name || "?") + "」";
+      case "commented": return "评论:";
+      default: return ev.event;
+    }
+  }
+
+  function renderLog(events) {
+    var box = $("dt-timeline");
+    box.textContent = "";
+    var rows = (events || []).filter(function (ev) {
+      /* 只留对人有意义的动作, 交叉引用等噪音不显示 */
+      return ["assigned", "unassigned", "closed", "reopened", "edited",
+        "labeled", "unlabeled", "commented"].indexOf(ev.event) >= 0;
+    });
+    if (!rows.length) {
+      box.appendChild(el("div", "dt-empty", "暂无记录"));
+      return;
+    }
+    rows.sort(function (a, b) { return new Date(b.created_at) - new Date(a.created_at); });
+    rows.forEach(function (ev) {
+      var row = el("div", "dt-log-row");
+      row.appendChild(el("span", "dt-log-who", "@" + (ev.actor && ev.actor.login || "?")));
+      row.appendChild(el("span", "dt-log-what", textFor(ev)));
+      row.appendChild(el("span", "dt-log-time", relTime(ev.created_at)));
+      box.appendChild(row);
+      if (ev.event === "commented" && ev.body) {
+        box.appendChild(el("div", "dt-log-body", ev.body));
+      }
+    });
+  }
+
+  async function loadLog() {
+    if (logLoaded || !current) return;
+    var num = current.number;  /* 防串台: 返回时可能已切到别的任务 */
+    var box = $("dt-timeline");
+    box.textContent = "";
+    box.appendChild(el("div", "dt-empty", "加载中…"));
+    try {
+      var events = await TB.api.getTimeline(cfg().owner, cfg().repo, num);
+      if (!current || current.number !== num) return;
+      logLoaded = true;
+      renderLog(events);
+    } catch (err) {
+      if (!current || current.number !== num) return;
+      box.textContent = "";
+      box.appendChild(el("div", "dt-empty dt-err", "记录加载失败: " + (err.message || String(err))));
+    }
+  }
+
+  async function postComment() {
+    var text = $("dt-comment").value.trim();
+    if (!text) return;
+    var btn = $("btn-dt-comment");
+    btn.disabled = true;
+    try {
+      await TB.api.addComment(cfg().owner, cfg().repo, current.number, text);
+      $("dt-comment").value = "";
+      TB.toast("评论已发送");
+      logLoaded = false;
+      loadLog();
+    } catch (err) {
+      TB.toast(err.status === 403 ? "没有评论权限" : (err.message || String(err)), true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  TB.modals.openDetail = openDetail;
+  TB.detail = { openDetail: openDetail, renderLog: renderLog, textFor: textFor };
+
+  /* ---- 事件绑定(模块加载时一次) ---- */
+  $("tab-detail").addEventListener("click", function () { selectTab("detail"); });
+  $("tab-log").addEventListener("click", function () { selectTab("log"); loadLog(); });
+  $("btn-dt-edit").addEventListener("click", openEdit);
+  $("btn-ed-save").addEventListener("click", saveEdit);
+  $("btn-ed-cancel").addEventListener("click", function () { result("", true); selectTab("detail"); });
+  $("btn-dt-cancel-issue").addEventListener("click", cancelIssue);
+  $("btn-dt-comment").addEventListener("click", postComment);
+  $("btn-dt-close").addEventListener("click", function () { hide("overlay-detail"); });
+  $("overlay-detail").addEventListener("click", function (e) {
+    if (e.target === e.currentTarget) hide("overlay-detail");
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") hide("overlay-detail");
+  });
+})();
+
 /* 应用主体: 状态 + 启动链 + 动作(含 403 降级) + 刷新 */
 (function () {
   "use strict";
@@ -1092,7 +1433,8 @@ body {
     { number: 103, title: "仿真数据 C1 入门引导文档评审", state: "open", assignees: [], labels: [{ name: "P2" }, { name: "blocked" }], created_at: nowAgo(6000), updated_at: nowAgo(120) },
     { number: 104, title: " heatmap 色标量化 legend 对齐 Tableau", state: "open", assignees: [{ login: "wyf-demo" }], labels: [{ name: "P1" }], created_at: nowAgo(8000), updated_at: nowAgo(200) },
     { number: 105, title: "跨港对比 demo 数据源覆盖矩阵核对", state: "open", assignees: [{ login: "wyf-demo" }], labels: [{ name: "P2" }, { name: "wayfinder:task" }], created_at: nowAgo(9000), updated_at: nowAgo(30) },
-    { number: 100, title: "9 月值班 bot 链路适配", state: "closed", assignees: [{ login: "wyf-demo" }], labels: [{ name: "P2" }], created_at: nowAgo(20000), updated_at: nowAgo(2000) }
+    { number: 100, title: "9 月值班 bot 链路适配", state: "closed", state_reason: "completed", assignees: [{ login: "wyf-demo" }], labels: [{ name: "P2" }], created_at: nowAgo(20000), updated_at: nowAgo(2000) },
+    { number: 106, title: "重复发布的测试票(示例注销)", state: "closed", state_reason: "not_planned", assignees: [], labels: [{ name: "P2" }], created_at: nowAgo(10000), updated_at: nowAgo(100) }
   ];
   /* mock 里 #102 模拟"评论认领待确认" */
   var MOCK_PENDING = { 102: "wyf-demo" };

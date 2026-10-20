@@ -31,7 +31,11 @@
   function actionButton(text, className, onClick) {
     var btn = el("button", "btn btn-small " + className, text);
     btn.type = "button";
-    btn.addEventListener("click", onClick);
+    /* 整卡可点开详情, 按钮先阻断冒泡 */
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      onClick();
+    });
     return btn;
   }
 
@@ -41,7 +45,11 @@
   }
 
   function buildCard(issue, state) {
-    var card = el("div", "card");
+    var cancelled = issue.state === "closed" && issue.state_reason === "not_planned";
+    var card = el("div", "card card-click");
+    card.addEventListener("click", function () {
+      if (TB.modals && TB.modals.openDetail) TB.modals.openDetail(issue);
+    });
 
     var meta = el("div", "card-meta");
     meta.appendChild(el("span", "card-num", "#" + issue.number));
@@ -54,11 +62,13 @@
       meta.appendChild(el("span", "chip badge-blocked", "blocked"));
     }
     if (issue.state === "closed") {
-      meta.appendChild(el("span", "chip chip-done", "已完成"));
+      meta.appendChild(cancelled
+        ? el("span", "chip chip-cancelled", "已注销")
+        : el("span", "chip chip-done", "已完成"));
     }
     card.appendChild(meta);
 
-    card.appendChild(el("div", "card-title", issue.title));
+    card.appendChild(el("div", "card-title" + (cancelled ? " card-title-cancelled" : ""), issue.title));
 
     var foot = el("div", "card-meta");
     var assignees = issue.assignees || [];
@@ -114,6 +124,8 @@
     if (issue.state === "open" && assignees.length === 0) return false; /* 未认领票不属于任何人 */
     return assignees.some(function (a) { return a.login === who; });
   }
+
+  TB.relTime = relTime; /* 详情弹窗复用 */
 
   TB.renderBoard = function (state) {
     var buckets = { todo: [], doing: [], done: [] };

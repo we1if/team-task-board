@@ -121,6 +121,55 @@
   </div>
 </div>
 
+<div id="overlay-detail" class="overlay hidden">
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="dt-title">
+    <div class="detail-head">
+      <h2 id="dt-title" class="modal-title"></h2>
+      <span id="dt-num" class="card-num"></span>
+    </div>
+    <div id="dt-meta" class="card-meta detail-meta"></div>
+    <div class="tabs">
+      <button id="tab-detail" class="tab tab-active" type="button">详情</button>
+      <button id="tab-log" class="tab" type="button">记录</button>
+    </div>
+    <div id="pane-detail">
+      <div id="dt-body" class="detail-body"></div>
+      <p id="dt-error" class="form-result"></p>
+    </div>
+    <div id="pane-edit" class="hidden">
+      <div class="form-row">
+        <label for="ed-title">标题</label>
+        <input id="ed-title" type="text">
+      </div>
+      <div class="form-row">
+        <label for="ed-body">说明</label>
+        <textarea id="ed-body" rows="6"></textarea>
+      </div>
+      <div class="modal-actions">
+        <span class="spacer"></span>
+        <button id="btn-ed-cancel" class="btn btn-ghost" type="button">取消</button>
+        <button id="btn-ed-save" class="btn btn-primary" type="button">保存</button>
+      </div>
+    </div>
+    <div id="pane-log" class="hidden">
+      <div id="dt-timeline" class="dt-timeline"></div>
+      <div class="form-row">
+        <textarea id="dt-comment" rows="3" placeholder="留言:进度、反馈、问题…"></textarea>
+      </div>
+      <div class="modal-actions">
+        <span class="spacer"></span>
+        <button id="btn-dt-comment" class="btn btn-primary" type="button">发送评论</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button id="btn-dt-edit" class="btn" type="button">编辑</button>
+      <button id="btn-dt-cancel-issue" class="btn" type="button">注销任务</button>
+      <span class="spacer"></span>
+      <button id="btn-dt-close" class="btn btn-ghost" type="button">关闭</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast hidden"></div>
 
 <script src="assets/config.js"></script>
@@ -128,6 +177,7 @@
 <script src="assets/render-board.js"></script>
 <script src="assets/render-modal.js"></script>
 <script src="assets/render-import.js"></script>
+<script src="assets/render-detail.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>

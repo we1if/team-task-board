@@ -110,6 +110,12 @@
       "/issues/" + num + "/comments?per_page=100");
   }
 
+  /* 任务动态事件流: assigned/closed/reopened/edited/commented 等, commented 事件自带 body */
+  async function getTimeline(owner, repo, num) {
+    return ghFetch("/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) +
+      "/issues/" + num + "/timeline?per_page=100");
+  }
+
   TB.api = {
     getUser: getUser,
     getRepo: getRepo,
@@ -117,6 +123,7 @@
     createIssue: createIssue,
     patchIssue: patchIssue,
     addComment: addComment,
-    listComments: listComments
+    listComments: listComments,
+    getTimeline: getTimeline
   };
 })();
