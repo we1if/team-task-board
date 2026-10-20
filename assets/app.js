@@ -81,13 +81,14 @@
   /* mock 里 #102 模拟"评论认领待确认" */
   var MOCK_PENDING = { 102: "wyf-demo" };
 
-  /* ---- 待确认认领检测: 扫未分配 open 票的评论 ---- */
+  /* ---- 待确认认领检测: 扫未分配 open 票的评论(并行请求, 串行会拖长整个刷新) ---- */
   var CLAIM_RE = /^\/认领 @(\S+)/;
   async function detectPendingClaims(issues) {
     var pending = {};
-    for (var i = 0; i < issues.length; i++) {
-      var issue = issues[i];
-      if (issue.state !== "open" || (issue.assignees || []).length > 0 || !issue.comments) continue;
+    var candidates = issues.filter(function (issue) {
+      return issue.state === "open" && (issue.assignees || []).length === 0 && issue.comments;
+    });
+    await Promise.all(candidates.map(async function (issue) {
       try {
         var comments = await TB.api.listComments(state.config.owner, state.config.repo, issue.number);
         for (var j = comments.length - 1; j >= 0; j--) {
@@ -95,7 +96,7 @@
           if (m) { pending[issue.number] = m[1]; break; }
         }
       } catch (_) { /* 单票评论拉取失败不阻塞整个看板 */ }
-    }
+    }));
     return pending;
   }
 
@@ -144,6 +145,7 @@
   var actions = {
     /* 认领: 主路径 PATCH assignees; 403 → 评论标记, 等有权限的人确认 */
     claim: async function (issue) {
+      toast("认领中…");
       try {
         await TB.api.patchIssue(state.config.owner, state.config.repo, issue.number, { assignees: [state.viewer] });
         issue.assignees = [{ login: state.viewer }];
@@ -178,13 +180,18 @@
     },
 
     complete: async function (issue) {
+      /* 乐观更新: 卡片先动, 请求后台飞; 失败回滚 */
+      var prevState = issue.state;
+      issue.state = "closed";
+      TB.renderBoard(state);
+      toast("#" + issue.number + " 完成中…");
       try {
         await TB.api.patchIssue(state.config.owner, state.config.repo, issue.number, { state: "closed" });
-        issue.state = "closed";
-        TB.renderBoard(state);
         toast("#" + issue.number + " 已完成", false,
           { label: "撤销", fn: function () { TB.actions.reopen(issue); } });
       } catch (err) {
+        issue.state = prevState;
+        TB.renderBoard(state);
         toast(err.status === 403 ? "关闭他人任务需要 Triage 权限" : (err.message || String(err)), true);
       }
     },

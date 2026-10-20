@@ -109,24 +109,26 @@
     }
   }
 
-  /* ---- 注销: 关闭 + 原生 not_planned 标记, 不发评论 ---- */
+  /* ---- 注销: 关闭 + 原生 not_planned 标记, 不发评论 ----
+     乐观更新: 本地先改先渲染, 慢网络下卡片立即归位; 失败回滚 */
   async function cancelIssue() {
     if (!window.confirm("确定注销该任务?将关闭并标为「已注销」,之后可重新打开。")) return;
-    var btn = $("btn-dt-cancel-issue");
-    btn.disabled = true;
+    var snapshot = { state: current.state, state_reason: current.state_reason };
+    current.state = "closed";
+    current.state_reason = "not_planned";
+    TB.renderBoard(TB.state);
+    hide("overlay-detail");
+    TB.toast("注销中…");
     try {
       await TB.api.patchIssue(cfg().owner, cfg().repo, current.number,
         { state: "closed", state_reason: "not_planned" });
-      current.state = "closed";
-      current.state_reason = "not_planned";
       TB.toast("已注销 #" + current.number);
-      hide("overlay-detail");
-      TB.renderBoard(TB.state);
       if (TB.refresh) TB.refresh(true);
     } catch (err) {
-      result(err.status === 403 ? "没有关闭该任务的权限" : (err.message || String(err)), false);
-    } finally {
-      btn.disabled = false;
+      current.state = snapshot.state;
+      current.state_reason = snapshot.state_reason;
+      TB.renderBoard(TB.state);
+      TB.toast(err.status === 403 ? "没有关闭该任务的权限" : (err.message || String(err)), true);
     }
   }
 

@@ -1332,24 +1332,26 @@ body {
     }
   }
 
-  /* ---- 注销: 关闭 + 原生 not_planned 标记, 不发评论 ---- */
+  /* ---- 注销: 关闭 + 原生 not_planned 标记, 不发评论 ----
+     乐观更新: 本地先改先渲染, 慢网络下卡片立即归位; 失败回滚 */
   async function cancelIssue() {
     if (!window.confirm("确定注销该任务?将关闭并标为「已注销」,之后可重新打开。")) return;
-    var btn = $("btn-dt-cancel-issue");
-    btn.disabled = true;
+    var snapshot = { state: current.state, state_reason: current.state_reason };
+    current.state = "closed";
+    current.state_reason = "not_planned";
+    TB.renderBoard(TB.state);
+    hide("overlay-detail");
+    TB.toast("注销中…");
     try {
       await TB.api.patchIssue(cfg().owner, cfg().repo, current.number,
         { state: "closed", state_reason: "not_planned" });
-      current.state = "closed";
-      current.state_reason = "not_planned";
       TB.toast("已注销 #" + current.number);
-      hide("overlay-detail");
-      TB.renderBoard(TB.state);
       if (TB.refresh) TB.refresh(true);
     } catch (err) {
-      result(err.status === 403 ? "没有关闭该任务的权限" : (err.message || String(err)), false);
-    } finally {
-      btn.disabled = false;
+      current.state = snapshot.state;
+      current.state_reason = snapshot.state_reason;
+      TB.renderBoard(TB.state);
+      TB.toast(err.status === 403 ? "没有关闭该任务的权限" : (err.message || String(err)), true);
     }
   }
 
@@ -1532,13 +1534,14 @@ body {
   /* mock 里 #102 模拟"评论认领待确认" */
   var MOCK_PENDING = { 102: "wyf-demo" };
 
-  /* ---- 待确认认领检测: 扫未分配 open 票的评论 ---- */
+  /* ---- 待确认认领检测: 扫未分配 open 票的评论(并行请求, 串行会拖长整个刷新) ---- */
   var CLAIM_RE = /^\/认领 @(\S+)/;
   async function detectPendingClaims(issues) {
     var pending = {};
-    for (var i = 0; i < issues.length; i++) {
-      var issue = issues[i];
-      if (issue.state !== "open" || (issue.assignees || []).length > 0 || !issue.comments) continue;
+    var candidates = issues.filter(function (issue) {
+      return issue.state === "open" && (issue.assignees || []).length === 0 && issue.comments;
+    });
+    await Promise.all(candidates.map(async function (issue) {
       try {
         var comments = await TB.api.listComments(state.config.owner, state.config.repo, issue.number);
         for (var j = comments.length - 1; j >= 0; j--) {
@@ -1546,7 +1549,7 @@ body {
           if (m) { pending[issue.number] = m[1]; break; }
         }
       } catch (_) { /* 单票评论拉取失败不阻塞整个看板 */ }
-    }
+    }));
     return pending;
   }
 
@@ -1595,6 +1598,7 @@ body {
   var actions = {
     /* 认领: 主路径 PATCH assignees; 403 → 评论标记, 等有权限的人确认 */
     claim: async function (issue) {
+      toast("认领中…");
       try {
         await TB.api.patchIssue(state.config.owner, state.config.repo, issue.number, { assignees: [state.viewer] });
         issue.assignees = [{ login: state.viewer }];
@@ -1629,13 +1633,18 @@ body {
     },
 
     complete: async function (issue) {
+      /* 乐观更新: 卡片先动, 请求后台飞; 失败回滚 */
+      var prevState = issue.state;
+      issue.state = "closed";
+      TB.renderBoard(state);
+      toast("#" + issue.number + " 完成中…");
       try {
         await TB.api.patchIssue(state.config.owner, state.config.repo, issue.number, { state: "closed" });
-        issue.state = "closed";
-        TB.renderBoard(state);
         toast("#" + issue.number + " 已完成", false,
           { label: "撤销", fn: function () { TB.actions.reopen(issue); } });
       } catch (err) {
+        issue.state = prevState;
+        TB.renderBoard(state);
         toast(err.status === 403 ? "关闭他人任务需要 Triage 权限" : (err.message || String(err)), true);
       }
     },
